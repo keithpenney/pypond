@@ -1,0 +1,7 @@
+# Ignore compiled python pyc files
+*.pyc
+**/*.pyc
+
+# Ignore pdfs too
+*.pdf
+**/*.pdf

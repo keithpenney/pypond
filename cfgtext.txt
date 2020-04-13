@@ -1,0 +1,6 @@
+        #[DEFAULT]
+        self.notelowest = config.get('notelowest', None)
+        self.notehighest = config.get('notehighest', None)
+        self.key = config.get('key', None)
+        self.diatonicity = config.get('diatonicity', None)
+        self.timesignature = config.get('timesignature', None)
