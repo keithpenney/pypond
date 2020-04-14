@@ -5,3 +5,7 @@
 # Ignore pdfs too
 *.pdf
 **/*.pdf
+
+# Gotta ignore all these lilypond files being generated
+*.ly
+**/*.ly

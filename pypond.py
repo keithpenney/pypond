@@ -13,10 +13,11 @@
 import sys
 import re
 
-DEBUG = True
+DEBUG = False
 
 _LILYFLAT = 'es'
 _LILYSHARP = 'is'
+_LILYTIE = "~ "
 _LILYMIDDLEOCTAVE = 3
 
 _DEFAULT_OCTAVE = 4
@@ -82,6 +83,7 @@ class Note(object):
     }
     _reFlat = re.compile(flatChar + "+$")
     _reSharp = re.compile(sharpChar + "+$")
+    _lilyTie = "~ "
     def __init__(self, notestring, duration = None):
         self.noteString = notestring
         self.noteName = Note._NoteNameFromString(notestring)
@@ -141,6 +143,53 @@ class Note(object):
         else:
             return "," * (_LILYMIDDLEOCTAVE - o)
 
+    def _getLilyDurationAligned(self, alignBeat):
+        """First parse the alignBeat, then walk from LS-to-MS through the alignBeat parse
+        and 'fill in the holes' taking from the note duration.  Once the beat has rounded
+        out to all zeros (an even multiple of whole notes), walk down MS-to-LS the remaining
+        note duration parse.
+
+        On the first pass (LS-to-MS), we don't need to worry about dotting notes."""
+        # Hmmm... didn't seem to get it right.  Poke further into this
+        _dbg("  -   -   -   -   -   -   -   -\nalignBeat = {}".format(alignBeat))
+        if alignBeat == None:
+            return self._getLilyDuration()
+        if self.duration == None:
+            return ""
+        duration = self.duration        # Need a shallow copy since we'll be modifying this
+        nBeats = self.parseBeatLength(alignBeat)
+        _dbg("parsed beat = {}{}{}{}{}{}{}".format(*nBeats))
+        _dbg("old duration = {}".format(duration))
+        ll = []
+        tieSymbol = ""
+        for n in range(len(nBeats)):    # Walk the beat parse
+            if nBeats[-(n+1)]:          # (LS-to-MS)
+                index = len(nBeats) - (n + 1)
+                ddur = 2**(-index)      # We need to borrow this delta-duration from the note if possible
+                if duration >= ddur:
+                    duration -= ddur
+                    ll.append("{}{}".format(tieSymbol, str(2**index)))
+                    tieSymbol = self._lilyTie
+        _dbg("After walk up: {}".format("".join(ll)))
+        _dbg("new duration = {}".format(duration))
+        # Now we walk down the parsed remainder of the note duration
+        nNotes = self.parseBeatLength(duration)
+        candot = False                  # Note dotting
+        for n in range(len(nNotes)):    # Walk through the breakdown of the note duration, starting from whole notes
+            if nNotes[n] > 0:           # If a duration exists,
+                if candot:              # If the last duration exists, we can dot it!
+                    candot = False      # Then we turn off dotting so we don't end up with double-dots
+                    ll.append('.')      # (those are silly)
+                else:
+                    candot = True       # The next note can be a dot if present
+                    durationInt = 2**n  # 4 for quarter note, 8 for eighth note, etc...
+                    ll.append("{}{}".format(tieSymbol, str(durationInt)))
+                    tieSymbol = self._lilyTie # Once the first symbol has been added to lily list, set the tie symbol
+            else:
+                candot = False      # The next note cannot be a dot
+        _dbg("After walk down: {}".format("".join(ll)))
+        return "".join(ll)
+
     def _getLilyDuration(self, alignBeat = None):
         """Get the duration indication in GNU lilypond format.
         For a power-of-two (i.e. quarter note, eighth note, whole note, etc.), we simply
@@ -179,7 +228,7 @@ class Note(object):
                     if nNotes[shortestBeat] > 0:    # If the note duration includes this shortest beat, let's start with that one
                         ll.append(str(2**shortestBeat))  # Append it to the lily list
                         nNotes[shortestBeat] = 0    # Then blank it out of the loop
-                        tieSymbol = "~ "       # Set the tie symbol for subsequent items in the list
+                        tieSymbol = self._lilyTie # Set the tie symbol for subsequent items in the list
         
         for n in range(len(nNotes)):    # Walk through the breakdown of the note duration, starting from whole notes
             if nNotes[n] > 0:           # If a duration exists,
@@ -190,10 +239,10 @@ class Note(object):
                     candot = True       # The next note can be a dot if present
                     durationInt = 2**n  # 4 for quarter note, 8 for eighth note, etc...
                     ll.append("{}{}".format(tieSymbol, str(durationInt)))
-                    tieSymbol = "~ "   # Once the first symbol has been added to lily list, set the tie symbol
+                    tieSymbol = self._lilyTie # Once the first symbol has been added to lily list, set the tie symbol
             else:
                 candot = False      # The next note cannot be a dot
-        return " ".join(ll)
+        return "".join(ll)
 
     @staticmethod
     def parseBeatLength(length):
@@ -230,7 +279,7 @@ class Note(object):
         n = self.getNoteName()[0].lower()
         a = self._getLilyAccidental()
         o = self._getLilyOctave()
-        d = self._getLilyDuration(beatAlign)
+        d = self._getLilyDurationAligned(beatAlign)
         return "{}{}{}{}".format(n, a, o, d)
 
     def setDuration(self, duration):
@@ -340,6 +389,8 @@ class Note(object):
 
     @classmethod
     def _NoteNameFromString(cls, notestring):
+        if notestring == None:
+            return ""
         notestring = notestring.strip()
         notenames = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
         if (len(notestring) > 3) or (len(notestring) < 1):
@@ -358,6 +409,8 @@ class Note(object):
 
     @classmethod
     def _AccidentalFromString(cls, notestring):
+        if notestring == None:
+            return ""
         notestring = notestring.strip()
         if (len(notestring) > 3) or (len(notestring) < 1):
             _dbg("Invalid notestring: {}".format(notestring))
@@ -379,6 +432,8 @@ class Note(object):
         """Get the octave specified by a notestring.
         Returns None on failure.  Returns _DEFAULT_OCTAVE if no octave
         is specified in notestring"""
+        if notestring == None:
+            return ""
         notestring = notestring.strip()
         index = -1
         if len(notestring) <= 1:
@@ -504,11 +559,11 @@ class Note(object):
         return self.noteString
 
     def copy(self):
-        return self.new(self.noteString)
+        return self.new(self.noteString, self.duration)
 
     @classmethod
-    def new(cls, notestring):
-        return cls(notestring)
+    def new(cls, notestring, duration = None):
+        return cls(notestring, duration)
 
     def __repr__(self):
         return "Note({})".format(self.getNoteString())
@@ -519,6 +574,35 @@ class Note(object):
 
     def _print(self):
         print(self._summary())
+
+class Rest(Note):
+    _lilyTie = " "
+    def __init__(self, duration = None):
+        super().__init__(notestring = None, duration = duration)
+        self.noteName = 'r'
+        self.noteString = 'r'
+
+    def _getLilyAccidental(self):
+        """A rest has no accidental"""
+        return ""
+
+    def _getLilyOctave(self):
+        """A rest has no associated octave"""
+        return ""
+
+    def getNoteByInterval(self, interval, sharp = True):
+        """This is nonsense; might as well return another rest."""
+        return Rest(self.duration)
+
+    def __repr__(self):
+        return "Rest({})".format(self.getNoteString())
+
+    def copy(self):
+        return self.new(self.duration)
+
+    @classmethod
+    def new(cls, duration):
+        return cls(duration)
 
 def _dbg(*args, **kwargs):
     if DEBUG:
@@ -660,10 +744,18 @@ def _testGetPitchFromNoteString(args):
     else:
         print(USAGE)
 
+def _testRest(args):
+    USAGE = "Usage:\n\tpython3 {0} <RestDuration>".format(sys.argv[0])
+    if len(args) > 1:
+        restDuration = _float(args[1])
+        rest = Rest(restDuration)
+        print("rest = {} = {}".format(rest, rest.asLily()))
+
 if __name__ == "__main__":
     import sys
     argv = sys.argv
     #_testNoteInterval(argv)
     #_testNoteCopy(argv)
     #_testNoteDuration(argv)
-    _testGetPitchFromNoteString(argv)
+    #_testGetPitchFromNoteString(argv)
+    _testRest(argv)

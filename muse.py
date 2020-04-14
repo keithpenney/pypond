@@ -29,6 +29,7 @@ import re
 import pypond
 import random
 
+DEBUG = True
 
 class MelodyAlgorithm(object):
     def __init__(self, configuration):
@@ -49,7 +50,11 @@ class MelodyAlgorithm(object):
         noteHighest = config.get('noteHighest', None)
         if noteHighest != None:
             self.maxPitch = noteHighest.getMIDIByte()
-        print("self.minPitch = {}; = {}".format(self.minPitch, self.maxPitch))
+        _dbg("self.minPitch = {}; = {}".format(self.minPitch, self.maxPitch))
+        self.density = config.get('density', None)
+        if self.density == None:
+            self.density = 1.0
+        print("self.density = {}".format(self.density))
 
     def plantSeed(self, seed):
         """Seed any pseudo-random number generation."""
@@ -72,14 +77,19 @@ class MARandom(MelodyAlgorithm):
 
     def getNextNote(self):
         #pitch = int(random.random()*(self.maxPitch - self.minPitch) + self.minPitch)
-        pitch = random.randint(self.minPitch, self.maxPitch)
+        isRest = False
+        if random.random() > self.density:
+            isRest = True
         rint = random.randint(1, 2**(self.minDurationPwr2 - self.maxDurationPwr2))
         duration = rint*(2**(self.maxDurationPwr2 - self.minDurationPwr2))
-        #duration = 2**(int(random.random()*(self.minDurationPwr2 - self.maxDurationPwr2) + self.maxDurationPwr2))
-        note = pypond.Note.fromMIDIByte(pitch, duration = duration)
-        #note.setDuration(duration)
         #print("pitch = {}, duration = {}, note = {}".format(pitch, duration, note.getNoteName()))
-        return note
+        if isRest:
+            rest = pypond.Rest(duration)
+            return rest
+        else:
+            pitch = random.randint(self.minPitch, self.maxPitch)
+            note = pypond.Note.fromMIDIByte(pitch, duration = duration)
+            return note
 
 class MAGaussMeander(MelodyAlgorithm):
     def __init__(self):
@@ -365,7 +375,8 @@ class Configuration(object):
         'Diatonicity'       : (float, 0),
         'timeSignature'     : (_TimeSignature, "4/4"),
         'algorithm'         : (_AlgorithmParser, "MARandom"),
-        'numMeasures'       : (int, 8)
+        'numMeasures'       : (int, 8),
+        'density'           : (float, 1.0)
     }
     def __init__(self, filename = None):
         self.filename = filename
@@ -447,6 +458,10 @@ class Error_InvalidConfig(Exception):
 class Error_FileNotFound(Exception):
     pass
 
+
+def _dbg(*args, **kwargs):
+    if DEBUG:
+        print(*args, **kwargs)
 
 def _testTimeSignature(args):
     USAGE = "python3 {} <key>".format(argv[0])

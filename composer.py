@@ -10,12 +10,14 @@
 # TODO Dotted notes need to know when to break across measures
 
 import os, subprocess
-import muse
+import muse, pypond
 import time
 
 DEBUG = False
 
+# Change the below to match the install path of GNU Lilypond on your system
 _LILYPATH = "\"C:/Program Files (x86)/LilyPond/usr/bin\""
+# If using Windows, this should be "lilypond.exe"; if using MacOS/Linux, it should simply be "lilypond"
 _LILYEXEC = "lilypond.exe"
 
 class Composer():
@@ -52,14 +54,14 @@ class Composer():
         return self.algorithm.getNextNoteLily()
 
     def getNextNoteLily(self):
-        tiesymbol = "~ "
+        #tiesymbol = pypond._LILYTIE
+        startBeat = self.beatCount
         note = self.algorithm.getNextNote()
-        notes = self.splitAtMeasures(note)
-        
+        notes = self.splitAtMeasures(note)  # modifies self.beatCount
         if len(notes) > 1:
-            return (notes[0].asLily(self.beatCount) + tiesymbol, notes[1].asLily())
+            return (notes[0].asLily(startBeat) + notes[0]._lilyTie, notes[1].asLily())
         else:
-            return (notes[0].asLily(self.beatCount),)      # TODO Handle ties in GNU lilypond format
+            return (notes[0].asLily(startBeat),)      # TODO Handle ties in GNU lilypond format
         
         #return (x.asLily(self.beatCount) for x in notes)
 
@@ -67,6 +69,7 @@ class Composer():
         # figure out the math here
         noteDuration = note.getDuration()
         noteLength = noteDuration # recall duration not stored as reciprocol units
+        _dbg("=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=")
         _dbg("beatCount = {}; noteLength = {}; measureCount = {}".format(
              self.beatCount, noteLength, self.measureCount))
         if self.beatCount + noteLength >= self.measureDuration:     # If the note would continue to the next measure
@@ -157,7 +160,7 @@ class Composer():
     def getFd(self):
         #return None     # TEMPORARY BYPASS
         try:
-            print("opening {}".format(self.outputFilename))
+            _dbg("opening {}".format(self.outputFilename))
             fd = open(self.outputFilename, 'w')
         except:
             return None
@@ -181,7 +184,7 @@ class Composer():
 
     def writeNotes(self, fd = None):
         wordcount = 0
-        wordsperline = 16
+        wordsperline = 4
         notes = []
         while not self.finished:
             nextNotes = self.getNextNoteLily()
@@ -189,7 +192,7 @@ class Composer():
                 notes.append(note)
                 if wordcount == wordsperline:
                     wordcount = 0
-                    notes.append('\n  ')
+                    notes.append('\n\r  ')
                 else:
                     wordcount += 1
         notestring = " ".join(notes)
