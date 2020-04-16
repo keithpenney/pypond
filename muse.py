@@ -26,7 +26,7 @@ class Key(keystring)
 
 import configparser
 import re
-import pypond
+import pypond, theory
 import random
 
 DEBUG = True
@@ -120,7 +120,84 @@ class MAGaussMeander(MelodyAlgorithm):
         #print("gauss = {}".format(n))
         return n
 
+def _getIntervalsModal(intervals, scaleDegree):
+    l = len(intervals)
+    # [(f[(6 - 1 + n) % l] + 12 - f[6 - 1]) % 12 for n in range(l)]
+    return ((intervals[(scaleDegree - 1 + n) % l] + 12 - intervals[scaleDegree - 1]) % 12
+            for n in range(l))
+
+class _KeyQuality(object):
+    major = 0
+    minor = 1
+    dimwh = 2
+    dimhw = 3
+    chromatic = 4
+    wholetone = 5
+
+    qualities = (major, minor, dimwh, dimhw, chromatic, wholetone)
+
+    _decodeDict = {
+        major : "maj",
+        minor : "min",
+        dimwh : "dwh",
+        dimhw : "dhw",
+        chromatic : "*",
+        wholetone : "w"
+    }
+
+    # Regex match-strings for parsing input
+    _reMajor = re.compile("((M((AJ)|(aj))?)|maj)$")
+    _reMinor = re.compile("((m(in)?)|(M((IN)|(in))))$")
+    _reDimWH = re.compile("((D((wh)|(WH))?)|(d(wh)?))$")
+    _reDimHW = re.compile("((D((HW)|(hw)))|dhw)$")
+    _reChromatic = re.compile("[*cC]$")
+    _reWholeTone = re.compile("[Ww]$")
+
+    @classmethod
+    def parse(cls, qstring):
+        """Parse a string describing a key quality and return a _KeyQuality class attribute
+        or None if no match is found."""
+        if cls._reMajor.match(qstring):
+            r = cls.major
+        elif cls._reMinor.match(qstring):
+            r = cls.minor
+        elif cls._reDimWH.match(qstring):
+            r = cls.dimwh
+        elif cls._reDimHW.match(qstring):
+            r = cls.dimhw
+        elif cls._reChromatic.match(qstring):
+            r = cls.chromatic
+        elif cls._reWholeTone.match(qstring):
+            r = cls.wholetone
+        else:
+            r = None
+        return (r, cls._decodeDict.get(r, None))
+
+    @classmethod
+    def decode(cls, keyquality):
+        errstring = "Cannot decode {}".format(keyquality)
+        dec = cls._decodeDict.get(keyquality, None)
+        if dec == None:
+            print(errstring)
+        return dec
+
+
 class Key(object):
+    _intervalsMajor = (0, 2, 4, 5, 7, 9, 11) # wwhwwwh
+    _intervalsMinor = _getIntervalsModal(_intervalsMajor, 6)    # Aeolian
+    _intervalsDWH   = (0, 2, 3, 5, 6, 8, 9, 11)
+    _intervalsDHW   = (0, 1, 3, 4, 6, 7, 9, 10)
+    _intervalsChromatic = range(12)
+    _intervalsWholeTone = (0, 2, 4, 6, 8, 10)
+    _intervals = {
+        _KeyQuality.major : _intervalsMajor,
+        _KeyQuality.minor : _intervalsMinor,
+        _KeyQuality.dimwh : _intervalsDWH,
+        _KeyQuality.dimhw : _intervalsDHW,
+        _KeyQuality.chromatic : _intervalsChromatic,
+        _KeyQuality.wholetone : _intervalsWholeTone
+    }
+
     def __init__(self, keystring):
         self._setValidators()
         if keystring == None:
@@ -161,7 +238,8 @@ class Key(object):
                 qstring = keystring[sdiv:]
         self.tonic = pypond.Note(tonicString)
         self.quality, self.qualityString = self.parseQuality(qstring)
-        if (not self.tonic.checkValid()) or (self.quality == None):
+        self.intervals = self._intervals.get(self.quality, None)
+        if (not self.tonic.checkValid()) or (self.quality == None) or (self.intervals == None):
             return False
         return True
 
@@ -197,6 +275,26 @@ class Key(object):
         ls = self.quality
         ms = self.tonic.getEncoding()
         return (ms << 4) + ls
+
+    def getNotes(self, octave = None):
+        """Return a list of notes in the key in octave 'octave' (or default octave)."""
+        intervals = self.getIntervals()
+        tonic = self.getTonic()
+        notes = []
+        sharp = self.isSharpKey()
+        for ival in intervals:
+            notes.append(self.tonic.getNoteByInterval(ival, sharp = sharp))
+        return notes
+
+    def isSharpKey(self):
+        return theory.TheoryClass.isSharpKey(self)
+
+    def getIntervals(self):
+        return self.intervals
+
+    def getNotesModal(self, scaleDegree):
+        intvals = _getIntervalsModal(self.getIntervals(), scaleDegree)
+        pass
 
 class _TimeSignature(object):
     def __init__(self, *args, **kwargs):
@@ -257,91 +355,7 @@ class _TimeSignature(object):
     def __str__(self):
         return "{}/{}".format(self.getBeatsPerMeasure(), self.getMajorBeat())
 
-class _KeyQuality(object):
-    major = 0
-    minor = 1
-    dimwh = 2
-    dimhw = 3
-    chromatic = 4
-    wholetone = 5
 
-    qualities = (major, minor, dimwh, dimhw, chromatic, wholetone)
-
-    _decodeDict = {
-        major : "maj",
-        minor : "min",
-        dimwh : "dwh",
-        dimhw : "dhw",
-        chromatic : "*",
-        wholetone : "w"
-    }
-
-    # Regex match-strings for parsing input
-    _reMajor = re.compile("((M((AJ)|(aj))?)|maj)$")
-    _reMinor = re.compile("((m(in)?)|(M((IN)|(in))))$")
-    _reDimWH = re.compile("((D((wh)|(WH))?)|(d(wh)?))$")
-    _reDimHW = re.compile("((D((HW)|(hw)))|dhw)$")
-    _reChromatic = re.compile("[*cC]$")
-    _reWholeTone = re.compile("[Ww]$")
-
-    @classmethod
-    def parse(cls, qstring):
-        """Parse a string describing a key quality and return a _KeyQuality class attribute
-        or None if no match is found."""
-        if cls._reMajor.match(qstring):
-            r = cls.major
-        elif cls._reMinor.match(qstring):
-            r = cls.minor
-        elif cls._reDimWH.match(qstring):
-            r = cls.dimwh
-        elif cls._reDimHW.match(qstring):
-            r = cls.dimhw
-        elif cls._reChromatic.match(qstring):
-            r = cls.chromatic
-        elif cls._reWholeTone.match(qstring):
-            r = cls.wholetone
-        else:
-            r = None
-        return (r, cls._decodeDict.get(r, None))
-
-    @classmethod
-    def decode(cls, keyquality):
-        errstring = "Cannot decode {}".format(keyquality)
-        dec = cls._decodeDict.get(keyquality, None)
-        if dec == None:
-            print(errstring)
-        return dec
-
-def TheoryClass(object):
-    CircleOfFifths = ('c', 'g', 'd', 'a', 'e', 'b', 'f#', 'db', 'ab', 'eb', 'bb', 'f')
-    fourthInterval = 5 # 5 half-steps make a perfect fourth
-    fifthInterval  = 7 # 7 half-steps make a perfect fifth
-
-    @classmethod
-    def getKeyAtInterval(cls, key, interval):
-        """Returns a Key object of the same key quality as 'key', with tonic rooted
-        up a perfect-fifth from that of 'key'"""
-        interval = pypond._int(interval)
-        if interval == None:
-            raise pypond.Error_Interval("Cannot interpret interval {}".format(interval))
-        note = pypond.Note(key.getTonicName())
-        nextNote = note.getNoteByInterval(interval)
-        quality = key.getQuality()
-        nextKey = Key(nextNote.getNoteName())
-        nextKey.setQuality(quality)
-        return nextKey
-
-    @classmethod
-    def getNextFifth(cls, key):
-        """Returns a Key object of the same key quality as 'key', with tonic rooted
-        up a perfect-fifth from that of 'key'"""
-        return cls.getKeyAtInterval(cls.fifthInterval)
-
-    @classmethod
-    def getNextFourth(cls, key):
-        """Returns a Key object of the same key quality as 'key', with tonic rooted
-        up a perfect-fourth from that of 'key'"""
-        return cls.getKeyAtInterval(cls.fourthInterval)
 
 
 def _AlgorithmParser(algorithm):
@@ -458,7 +472,6 @@ class Error_InvalidConfig(Exception):
 class Error_FileNotFound(Exception):
     pass
 
-
 def _dbg(*args, **kwargs):
     if DEBUG:
         print(*args, **kwargs)
@@ -474,6 +487,7 @@ def _testTimeSignature(args):
         timeSig = _TimeSignature(s)
     else:
         print(USAGE)
+        return
     print("Time Signature : {}".format(timeSig))
 
 def _testConfiguration(args):
@@ -483,10 +497,23 @@ def _testConfiguration(args):
         cfg = Configuration(filename)
     else:
         print(USAGE)
+        return
     print("Configuration : {}".format(cfg))
+
+def _testKey(args):
+    USAGE = "python3 {} <keyString>".format(argv[0])
+    if len(argv) > 1:
+        keyString = argv[1]
+        key = Key(keyString)
+    else:
+        print(USAGE)
+        return
+    print("Key : {}\t{}".format(key, [n.getNoteName() for n in key.getNotes()]))
 
 if __name__ == "__main__":
     import sys
     argv = sys.argv
     #_testTimeSignature(argv)
     #_testConfiguration(argv)
+    _testKey(argv)
+

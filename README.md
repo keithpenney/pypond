@@ -40,6 +40,7 @@ _LILYEXEC = "lilypond.exe"
   logic (and that's a whole big thing).
 - The internal structure is a bit of a mess - need to have clear division of labor, reduce passing references
   up and down the inheritance chain.
+- muse.Key.getNotes() still returns wrong enharmonic equivalents for keys like "C#Maj" or "Fd"
 
 ### Unimplemented - TODO (hopefully)
 
