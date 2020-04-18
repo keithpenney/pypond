@@ -74,6 +74,7 @@ class TheoryClass(object):
             offset = 0
         noteName = key.getTonic().getNoteName().lower()
         l = len(cls.OrderOfFlats)
+        #print("noteName = {}".format(noteName))
         index = cls.OrderOfFlats.index(noteName) + offset
         if (index < l) and (index >= 0):
             return cls.SharpsMajor[index]

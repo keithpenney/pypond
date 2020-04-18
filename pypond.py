@@ -98,18 +98,51 @@ class Note(object):
             self.setDuration(duration)
         if not self.checkValid():
             _dbg("Warning!  This Note object is no good: {}".format(self.__repr__()))
+        #self.noteString = self.getNoteLetter() + self.getAccidentalString() + str(self.getOctave())
+        #print("__init__ : self = {}".format(self))
 
     def getNoteName(self):
         """Returns the note name as a lower-case string"""
         return self.noteName
 
+    def getNoteLetter(self):
+        """Returns the note letter name without any accidentals"""
+        if self.noteName != None and self.noteName != "":
+            return self.noteName[0]
+        else:
+            return ""
+
     def getAccidental(self):
         """Returns -1 for flat, +1 for sharp, or 0 for natural."""
         return self.accidental
 
+    def getAccidentalString(self, accidental = None):
+        """Return a string representing the accidental as sharps or flats
+        if 'accidental' == None, uses self.accidental"""
+        if accidental == None:
+            accidental = self.getAccidental()
+        else:
+            accidental = _int(accidental)
+        sign = 0
+        self.naturalChar
+        if accidental > 0:
+            sign = 1
+        elif accidental < 0:
+            sign = -1
+        for (k, v) in self.encodingAccidentals.items():
+            if sign == v:
+                sAcc = k
+                break
+        return sAcc * abs(accidental)
+
     def getOctave(self):
         """Returns the octave as a positive integer between 0 and 9"""
         return self.octave
+
+    def setOctave(self, octave):
+        oct = _int(octave)
+        if oct != None:
+            self.octave = oct
 
     def getNote(self):
         """Returns (noteName, accidental, octave)"""
@@ -282,12 +315,6 @@ class Note(object):
         d = self._getLilyDurationAligned(beatAlign)
         return "{}{}{}{}".format(n, a, o, d)
 
-    def setDuration(self, duration):
-        """Set the note duration in normal units, i.e. 0.125 = 1/8 for an eighth note.
-        Tuplets are undetermined as of yet."""
-        self.duration = float(duration)
-        self.durationMs = self.durationToMs(self.duration)
-
     def setBeatDuration(self, beatDuration):
         dur = _float(beatDuration)
         if dur == None:
@@ -322,13 +349,15 @@ class Note(object):
         return 1/self.duration
 
     def setDuration(self, duration):
-        """Set the duration of the note to 'duration'"""
+        """Set the note duration in normal units, i.e. 0.125 = 1/8 for an eighth note.
+        Tuplets are undetermined as of yet."""
         dur = _float(duration)
         if dur == None:
             raise Error_Float("Cannot interpret duration {}".format(duration))
             return False
         else:
             self.duration = dur
+            self.durationMs = self.durationToMs(dur)
             return True
 
     def getDurationMs(self):
@@ -341,7 +370,9 @@ class Note(object):
         if isinstance(notestring, Note):
             noteEncoding = notestring.getEncoding()
         else:
-            noteEncoding = _ENCODING_NOTES.get(notestring, None)
+            note = self.new(notestring)
+            simpleNote = note.simplify()
+            noteEncoding = simpleNote.getEncoding()
         if noteEncoding == None:
             return False
         else:
@@ -373,7 +404,39 @@ class Note(object):
 
     def getEncoding(self):
         """Get note name encoding according to global _ENCODING_NOTES dict"""
-        return _ENCODING_NOTES.get(self.noteName, None)
+        noteSimple = self.simplify()
+        return _ENCODING_NOTES.get(noteSimple.getNoteName(), None)
+
+    def simplify(self, notestring = None):
+        """Return a simplified enharmonic equivalent note.
+        I.e. if note = Dbb, note.simplify = C"""
+        if notestring != None:
+            note = self.new(notestring)
+        else:
+            note = self
+        b = note.getMIDIByte()
+        return self.fromMIDIByte(b)
+
+    def getInterval(self, note):
+        """Return the smallest interval between self and note, ignoring octaves.
+        If note is higher than self, returns interval > 0"""
+        note = note.copy() # Shouldn't need this.  I believe it passes a copy
+        note.setOctave(self.getOctave())
+        selfpitch = self.getMIDIByte()
+        notepitch = note.getMIDIByte()
+        interval = notepitch - selfpitch
+        if abs(interval) < 7:
+            return interval
+        else:
+            if interval < 0:
+                # Note is too low, go up an octave
+                sign = 1
+            else:
+                # Note is too high, go down an octave
+                sign = -1
+        while abs(interval) > 6:
+            interval += sign*12
+        return interval
 
     def getNoteByInterval(self, interval, sharp = True):
         """Returns a new Note object that is 'interval' away from self.
@@ -393,36 +456,55 @@ class Note(object):
             return ""
         notestring = notestring.strip()
         notenames = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
-        if (len(notestring) > 3) or (len(notestring) < 1):
-            _dbg("Invalid notestring: {}".format(notestring))
+        if (len(notestring) < 1):
+            _dbg("Empty notestring")
             return None
         if notestring[0].lower() not in notenames:
             _dbg("Note name not valid: {}".format(notestring[0]))
             return None
-        if len(notestring) >= 2:
-            if notestring[1] in cls.encodingAccidentals:
-                return notestring[0].upper() + notestring[1].lower()
-            else:
-                return notestring[0].upper()
+        if len(notestring) > 1:
+            n = 1
+            while n < len(notestring):
+                t, c = cls._isAccidentalChar(notestring[n])
+                if not t:
+                    # If we hit a character that's not an accidental char
+                    break
+                n += 1
+            return notestring[0].upper() + notestring[1:n].lower()
         else:
             return notestring[0].upper()
 
     @classmethod
     def _AccidentalFromString(cls, notestring):
+        """Parse the accidental from a notestring.  E.g.
+        notestring      Accidental
+        ----------      ----------
+        Ab4             -1
+        G8              0
+        C#-1            1
+        Fbb10           -2
+        B##6            2
+        etc..."""
         if notestring == None:
             return ""
         notestring = notestring.strip()
-        if (len(notestring) > 3) or (len(notestring) < 1):
-            _dbg("Invalid notestring: {}".format(notestring))
+        if (len(notestring) < 1):
+            _dbg("Empty notestring")
             return None
         if len(notestring) >= 2:
-            if notestring[1].isdigit():
+            if _isDigit(notestring[1]):
+                # Accidental not specified; Default to natural
                 return 0
-            elif notestring[1].lower() in cls.encodingAccidentals:
-                return cls.encodingAccidentals[notestring[1].lower()]
-            else:
-                _dbg("notestring is invalid: {}".format(notestring))
-                return None
+            count = 0
+            n = 1
+            while n < len(notestring):
+                t, c = cls._isAccidentalChar(notestring[n].lower())
+                if t:
+                    count += c
+                elif _isDigit(notestring[n]):
+                    break
+                n += 1
+            return count
         else:
             # len(notestring) = 1, no accidental, no octave
             return 0
@@ -439,16 +521,20 @@ class Note(object):
         if len(notestring) <= 1:
             # No octave specified
             return _DEFAULT_OCTAVE
-        elif len(notestring) == 2:
-            if notestring[1] in cls.encodingAccidentals:
+        else:
+            n = 1
+            while n < len(notestring):
+                c = notestring[n]
+                if _isDigit(c):
+                    break
+                n += 1
+            if n < len(notestring):
+                # A digit has been encountered
+                index = n
+            else:
                 # No octave specified
                 return _DEFAULT_OCTAVE
-            else:
-                # Octave specified
-                index = 1
-        else:
-            index = 2
-        oct = _int(notestring[index])
+        oct = _int(notestring[index:])
         if oct == None:
             _dbg("Cannot interpret octave from notestring {}".format(notestring))
         return oct
@@ -489,6 +575,16 @@ class Note(object):
             return encFlat*len(sAcc)
         if cls._reSharp.match(sAcc):
             return encSharp*len(sAcc)
+
+    @classmethod
+    def _isAccidentalChar(cls, char):
+        char = char[0]  # Just in case someone tries to pass more than one character
+        acc = cls.encodingAccidentals.get(char, None)
+        if acc == None:
+            f = False
+        else:
+            f = True
+        return (f, acc)
 
     def getMIDIByte(self):
         """Get the corresponding MIDI number representing the pitch"""
@@ -556,17 +652,41 @@ class Note(object):
         return Note(notestring, duration)
 
     def getNoteString(self):
+        self.noteString = self.getNoteLetter() + self.getAccidentalString() + str(self.getOctave())
         return self.noteString
 
     def copy(self):
         return self.new(self.noteString, self.duration)
+
+    def alter(self, interval):
+        """Similar to getNoteByInterval() except simply alters the note further.
+        I.e. if note = C#, note.getNoteByInterval(1) = D, note.alter(1) = C##
+        I.e. if note = Bb, note.getNoteByInterval(-2) = Ab, note.alter(-2) = Bbbb"""
+        acc = self.getAccidental()
+        sAcc = self.getAccidentalString(acc + _int(interval))
+        noteName = self.getNoteLetter()
+        return self.new(noteName + sAcc, self.getDuration())
+
+    def sharp(self):
+        """Return a copy of the note sharped E.g.:
+        if note = C,  note.sharp() = C#
+        if note = Eb, note.sharp() = E
+        if note = G#, note.sharp() = G##"""
+        return self.alter(1)
+
+    def flat(self):
+        """Return a copy of the note flatted E.g.:
+        if note = C,  note.flat() = Cb
+        if note = Eb, note.flat() = Ebb
+        if note = G#, note.flat() = G"""
+        return self.alter(-1)
 
     @classmethod
     def new(cls, notestring, duration = None):
         return cls(notestring, duration)
 
     def __repr__(self):
-        return "Note({})".format(self.getNoteString())
+        return "{}".format(self.getNoteString())
 
     def _summary(self):
         return "{} = {} =\t{} (MIDI)\t{} (lilypond)".format(self.getNoteString(), 
@@ -608,6 +728,17 @@ def _dbg(*args, **kwargs):
     if DEBUG:
         print(*args, **kwargs)
 
+def _isDigit(c):
+    if isinstance(c, int):
+        return True
+    if c.isdigit():
+        return True
+    if c == '-':
+        return True
+    if c == '+':
+        return True
+    return False
+
 def midiByte(note, onoff):
     noteName = None
     noteOctave = None
@@ -623,7 +754,7 @@ def midiByte(note, onoff):
         return None
     else:
         noteName = note[0].lower()
-    if not note[1].isdigit():
+    if not _isDigit(note[1]):
         if note[1].lower() in acc:
             if note[1] == acc[0]:
                 accidental = -1
@@ -751,6 +882,42 @@ def _testRest(args):
         rest = Rest(restDuration)
         print("rest = {} = {}".format(rest, rest.asLily()))
 
+def _testNoteSharpFlat(args):
+    USAGE = "Usage:\n\tpython3 {0} [NoteString]\n\tpython3 {0} [NoteString] [s,f]".format(sys.argv[0])
+    if len(argv) > 2:
+        note1 = Note(argv[1])
+        sharpflat = argv[2]
+        if sharpflat.strip().lower() == 'f':
+            note2 = note1.flat()
+            f = 'flat'
+        elif sharpflat.strip().lower() == 's':
+            note2 = note1.sharp()
+            f = 'sharp'
+        else:
+            print("{} must be 's' or 'f'".format(sharpflat))
+            return
+        print("{}({}) = {}".format(f, note1.getNoteString(), note2.getNoteString()))
+    elif len(argv) > 1:
+        noteName = argv[1]
+        note = Note(noteName)
+        note._print()
+    else:
+        print(USAGE)
+
+def _testNoteGetInterval(args):
+    USAGE = "Usage:\n\tpython3 {0} [NoteString]\n\tpython3 {0} [NoteString] [NoteString]".format(sys.argv[0])
+    if len(argv) > 2:
+        note1 = Note(argv[1])
+        note2 = Note(argv[2])
+        interval = note1.getInterval(note2)
+        print("{} - {} = {}".format(note2.getNoteString(), note1.getNoteString(), interval))
+    elif len(argv) > 1:
+        noteName = argv[1]
+        note = Note(noteName)
+        note._print()
+    else:
+        print(USAGE)
+
 if __name__ == "__main__":
     import sys
     argv = sys.argv
@@ -758,4 +925,6 @@ if __name__ == "__main__":
     #_testNoteCopy(argv)
     #_testNoteDuration(argv)
     #_testGetPitchFromNoteString(argv)
-    _testRest(argv)
+    #_testRest(argv)
+    #_testNoteSharpFlat(argv)
+    _testNoteGetInterval(argv)

@@ -32,16 +32,20 @@ import random
 DEBUG = True
 
 class MelodyAlgorithm(object):
-    def __init__(self, configuration):
+    def __init__(self, configuration = None):
         # Ultimately a configuration should go here
         self.numNotes = 16
         self.minPitch = 36    # Min pitch. This will eventually come from the configuration file
         self.maxPitch = 96  # Max pitch
+        self.keyNoteMin = None
+        self.keyNoteMax = None
         self.maxDurationPwr2 = 0 # Maximum duration (whole note).
         self.minDurationPwr2 = 4 # Sixteenth note
         # rint*(2**(maxDur - minDur))
         self.lengthRange = (2**(-x) for x in (self.minDurationPwr2, self.maxDurationPwr2))
         self.lastNote = None
+        if configuration != None:
+            self.setConfig(configuration)
 
     def setConfig(self, config):
         noteLowest = config.get('noteLowest', None)
@@ -55,6 +59,24 @@ class MelodyAlgorithm(object):
         if self.density == None:
             self.density = 1.0
         print("self.density = {}".format(self.density))
+        self.key = config.get('key')
+        self.keyNoteMin = config.get('keyNoteMin')
+        self.keyNoteMax = config.get('keyNoteMax')
+        self.numRange = self.key.getNumNotesInRange(self.keyNoteMin, self.keyNoteMax)
+
+    def getNoteInKey(self, n):
+        """Get a note within the key by a float from 0 to 1, which will be
+        quantized to key notes within self.keyNoteMin and self.keyNoteMax"""
+        nint = int(n*self.numRange)
+        minScaleDegree = self.key.getScaleDegree(self.keyNoteMin)
+        #maxScaleDegree = self.key.getScaleDegree(self.keyNoteMax)
+        minOctave = self.keyNoteMin.getOctave()
+        notesInKey = len(self.key.getNotes())
+        octaves = nint // notesInKey
+        rem = nint % notesInKey
+        note = self.key.getNoteByScaleDegree((rem + minScaleDegree) % notesInKey)
+        note.setOctave(minOctave + octaves)
+        return note
 
     def plantSeed(self, seed):
         """Seed any pseudo-random number generation."""
@@ -87,8 +109,10 @@ class MARandom(MelodyAlgorithm):
             rest = pypond.Rest(duration)
             return rest
         else:
-            pitch = random.randint(self.minPitch, self.maxPitch)
-            note = pypond.Note.fromMIDIByte(pitch, duration = duration)
+            #pitch = random.randint(self.minPitch, self.maxPitch)
+            #note = pypond.Note.fromMIDIByte(pitch, duration = duration)
+            note = self.getNoteInKey(random.random())
+            note.setDuration(duration)
             return note
 
 class MAGaussMeander(MelodyAlgorithm):
@@ -148,7 +172,7 @@ class _KeyQuality(object):
     # Regex match-strings for parsing input
     _reMajor = re.compile("((M((AJ)|(aj))?)|maj)$")
     _reMinor = re.compile("((m(in)?)|(M((IN)|(in))))$")
-    _reDimWH = re.compile("((D((wh)|(WH))?)|(d(wh)?))$")
+    _reDimWH = re.compile("((D((wh)|(WH)|(im)|(IM))?)|(d((wh)|(im)?)))$")
     _reDimHW = re.compile("((D((HW)|(hw)))|dhw)$")
     _reChromatic = re.compile("[*cC]$")
     _reWholeTone = re.compile("[Ww]$")
@@ -197,7 +221,16 @@ class Key(object):
         _KeyQuality.chromatic : _intervalsChromatic,
         _KeyQuality.wholetone : _intervalsWholeTone
     }
-
+    _alterationsMajor = (0, 0, 0, 0, 0, 0, 0)
+    _alterationsMinor = (0, 0, -1, 0, 0, -1, -1)    # Aeolian minor
+    _alterationsDWH   = (0, 0, -1, 0, -1, (-1, 0), 0)
+    _alterationsDHW   = (0, -1, -1, -1, (-1, 0), 0, -1)
+    _alterations = {
+        _KeyQuality.major : _alterationsMajor,
+        _KeyQuality.minor : _alterationsMinor,
+        _KeyQuality.dimwh : _alterationsDWH,
+        _KeyQuality.dimhw : _alterationsDHW
+    }
     def __init__(self, keystring):
         self._setValidators()
         if keystring == None:
@@ -206,6 +239,11 @@ class Key(object):
             print("Invalid keystring {}. Using default CM".format(keystring))
             self.parse("CM")
 
+    def getKeyString(self):
+        tonicString = self.tonic.getNoteName()
+        qualityString = self.getQualityString()
+        return tonicString + qualityString
+
     def _setValidators(self):
         self._vNoteNames = ('a', 'b', 'c', 'd', 'e', 'f', 'g')
         self._vAccidentals = ('b', '#')
@@ -213,7 +251,7 @@ class Key(object):
         # to leave here for redundant documentation
         self._vMajor = ('M', 'Maj', 'maj', 'MAJ')
         self._vMinor = ('m', 'Min', 'min', 'MIN')
-        self._vDWH = ('D', 'd', 'Dwh', 'DWH', 'dwh')
+        self._vDWH = ('D', 'd', 'Dim', 'dim', 'Dwh', 'DWH', 'dwh')
         self._vDHW = ('Dhw', 'DHW', 'dhw')
         self._vChromatic = ('*', 'C', 'c')
         self._vWholeTone = ('W', 'w')
@@ -227,15 +265,17 @@ class Key(object):
         elif len(keystring) == 1:
             tonicString = keystring
         else:
-            # len(keystring) >= 2
-            if keystring[1] in self._vAccidentals:
-                sdiv = 2
-                #tonicString = keystring[:2]
-            else:
-                sdiv = 1
-            tonicString = keystring[:sdiv]
-            if len(keystring) > sdiv:
-                qstring = keystring[sdiv:]
+            n = 1
+            while n < len(keystring):
+                t, f = pypond.Note._isAccidentalChar(keystring[n])
+                #print("{} is accidental char? {}".format(keystring[n], t))
+                if not t:
+                    break
+                n += 1
+            tonicString = keystring[:n]
+            if len(keystring) > n:
+                qstring = keystring[n:]
+        #print("n = {}; tonicString = {}; qstring = {}".format(n, tonicString, qstring))
         self.tonic = pypond.Note(tonicString)
         self.quality, self.qualityString = self.parseQuality(qstring)
         self.intervals = self._intervals.get(self.quality, None)
@@ -278,19 +318,116 @@ class Key(object):
 
     def getNotes(self, octave = None):
         """Return a list of notes in the key in octave 'octave' (or default octave)."""
-        intervals = self.getIntervals()
+        #intervals = self.getIntervals()
+        alterations = self._alterations.get(self.quality, None)
+        if alterations == None:
+            intervals = self.getIntervals()
+        else:
+            intervals = self._intervalsMajor    # First generate a major scale, we'll alter it later
         tonic = self.getTonic()
+        acc = tonic.getAccidental()
+        key = None                              # Need this in case acc != 0
+        if acc != 0:
+            tonic = pypond.Note(tonic.getNoteLetter())  # If the key has an accidental, first get the
+            tonicString = tonic.getNoteName()           # non-accidental scale
+            qualityString = self.getQualityString()
+            #print("New key: tonicString + qualityString = {}".format(tonicString + qualityString))
+            key = self.new(tonicString + qualityString)
         notes = []
-        sharp = self.isSharpKey()
+        sharp = self.isSharpKey(key)
         for ival in intervals:
-            notes.append(self.tonic.getNoteByInterval(ival, sharp = sharp))
+            notes.append(tonic.getNoteByInterval(ival, sharp = sharp))
+        if acc != 0:                            # If there's an accidental
+            for n in range(len(notes)):         # Apply that accidental to all notes in the scale
+                notes[n] = notes[n].alter(acc)
+        if alterations == None or self.quality == _KeyQuality.major:
+            return notes                        # If no alterations are required, we're done!
+                                    # Otherwise,
+        for n in range(len(notes)): # Perform any alterations as needed
+            alt = alterations[n]
+            if isinstance(alt, int):
+                if alt != 0:
+                    notes[n] = notes[n].alter(alt)
+            elif len(alt) > 1:
+                originalNote = notes[n]             # need to keep a reference to the unaltered note
+                notes[n] = originalNote.alter(alt[0])   # Alter the first note
+                for m in range(len(alt[1:])):
+                    notes.insert(n+m+1, originalNote.alter(alt[m+1])) # Jam any remaining alterations in there
         return notes
 
-    def isSharpKey(self):
-        return theory.TheoryClass.isSharpKey(self)
+    def getNumNotesInRange(self, noteMin, noteMax):
+        """Get the number of notes in the key within the range noteMin to noteMax (inclusive)."""
+        minoctave = noteMin.getOctave()
+        maxoctave = noteMax.getOctave()
+        scaleDegreeMin = self.getScaleDegree(noteMin)
+        scaleDegreeMax = self.getScaleDegree(noteMin)
+        return 7 * (maxoctave - minoctave) + (7 - scaleDegreeMin) + (scaleDegreeMax)
+
+    def getScaleDegree(self, note):
+        """Get the scale degree of note 'note' or None if 'note' not in key
+        (zero-indexed).  I.e. if key is AbMaj, key.getScaleDegree(Note(C)) = 2"""
+        t, high, low = self.isInKey(note)
+        if not t:
+            return None
+        index = 0
+        for keynote in self.getNotes():
+            if keynote.isEqualNote(note):
+                break
+            index += 1
+        return index
+
+    def getNoteByScaleDegree(self, degree):
+        notes = self.getNotes()
+        if degree < len(notes):
+            return notes[degree]
+        else:
+            return None
+
+    def isSharpKey(self, key = None):
+        if key == None:
+            key = self
+        return theory.TheoryClass.isSharpKey(key)
+
+    def isInKey(self, note):
+        """If 'note' is within the key, returns (True, nextHigher, nextLower).
+        Otherwise, returns (False, nextHigher, nextLower)
+        where 'nextHigher' is the next higher note in the key and 'nextLower' is
+        the next lower note in the key."""
+        intervalPositive = 12
+        intervalNegative = -12
+        nextHigher = None
+        nextLower = None
+        match = False
+        for keynote in self.getNotes():
+            interval = keynote.getInterval(note)    # interval > 0 if note > keynote
+            #print("{} - {} = {}".format(note, keynote, interval))
+            if interval > 0 and interval < intervalPositive:
+                intervalPositive = interval
+                nextLower = keynote
+            elif interval < 0 and interval > intervalNegative:
+                intervalNegative = interval
+                nextHigher = keynote
+            if keynote.isEqualNote(note):
+                match = True
+        octave = note.getOctave()
+        print("octave = {}".format(octave))
+        nextHigher.setOctave(octave)
+        if nextHigher.getMIDIByte() < note.getMIDIByte():
+            nextHigher.setOctave(octave + 1)
+        nextLower.setOctave(octave)
+        if nextLower.getMIDIByte() > note.getMIDIByte():
+            nextLower.setOctave(octave - 1)
+        return (match, nextHigher, nextLower)
 
     def getIntervals(self):
         return self.intervals
+
+    def copy(self):
+        return self.new(self.getKeyString())
+
+    @classmethod
+    def new(cls, keystring):
+        return cls(keystring)
 
     def getNotesModal(self, scaleDegree):
         intvals = _getIntervalsModal(self.getIntervals(), scaleDegree)
@@ -385,12 +522,12 @@ class Configuration(object):
         #Name               : (callable, defaultValue)
         'noteLowest'        : (pypond.Note, "A2"),
         'noteHighest'       : (pypond.Note, "C6"),
-        'Key'               : (Key, "CM"),
-        'Diatonicity'       : (float, 0),
+        'key'               : (Key, "CM"),
+        'diatonicity'       : (float, 0),
         'timeSignature'     : (_TimeSignature, "4/4"),
         'algorithm'         : (_AlgorithmParser, "MARandom"),
         'numMeasures'       : (int, 8),
-        'density'           : (float, 1.0)
+        'density'           : (float, 1.0),
     }
     def __init__(self, filename = None):
         self.filename = filename
@@ -436,13 +573,34 @@ class Configuration(object):
             else:
                 userCount += 1
             self.config[item[0]] = item[1][0](val)  # Add to self.config using the corresponding callable
+            print("config({}) = {}".format(item[0], val))
             self._configStrings[item[0]] = val      # Add the string name to self._configStrings
+        # = =  Add derived quantities = = 
+        noteMin = self.config.get('noteLowest')
+        noteMax = self.config.get('noteHighest')
+        print("noteMin = {}; noteMax = {}".format(noteMin, noteMax))
+        keyNoteMin, keyNoteMax = self.getKeyNoteRange(noteMin, noteMax)
+        self.config['keyNoteMin'] = keyNoteMin
+        self.config['keyNoteMax'] = keyNoteMax
         return (userCount, defaultCount)
 
     def useDefaults(self):
         """Force the use of default values for self.config by passing an empty user config"""
         self.filename = "--DEFAULTS--"
         return self._populateConfig({})
+
+    def getKeyNoteRange(self, noteMin, noteMax):
+        key = self.config.get('key')
+        print("key = {}".format(key))
+        mint, minlow, minhigh = key.isInKey(noteMin)
+        maxt, maxlow, maxhigh = key.isInKey(noteMax)
+        print("noteMin = {}; in key? {}".format(noteMin, mint))
+        print("noteMax = {}; in key? {}".format(noteMax, maxt))
+        if not mint:
+            noteMin = minhigh
+        if not maxt:
+            noteMax = maxlow
+        return (noteMin, noteMax)
 
     def __str__(self):
         return "Configuration({})".format(self.filename)
@@ -491,9 +649,9 @@ def _testTimeSignature(args):
     print("Time Signature : {}".format(timeSig))
 
 def _testConfiguration(args):
-    USAGE = "python3 {} <configFileName.ini>".format(argv[0])
+    USAGE = "python3 {} <configFileName.ini>".format(args[0])
     if len(argv) > 1:
-        filename = argv[1]
+        filename = args[1]
         cfg = Configuration(filename)
     else:
         print(USAGE)
@@ -501,19 +659,52 @@ def _testConfiguration(args):
     print("Configuration : {}".format(cfg))
 
 def _testKey(args):
-    USAGE = "python3 {} <keyString>".format(argv[0])
+    USAGE = "python3 {} <keyString>".format(args[0])
     if len(argv) > 1:
-        keyString = argv[1]
+        keyString = args[1]
         key = Key(keyString)
     else:
         print(USAGE)
         return
     print("Key : {}\t{}".format(key, [n.getNoteName() for n in key.getNotes()]))
 
+def _testIsInKey(args):
+    USAGE = "python3 {} <keyString> [note]".format(args[0])
+    if len(argv) > 2:
+        keyString = args[1]
+        key = Key(keyString)
+        note = pypond.Note(args[2])
+    elif len(argv) == 2:
+        return _testKey(args)
+    else:
+        print(USAGE)
+        return
+    t, high, low = key.isInKey(note)
+    scaleDegree = key.getScaleDegree(note)
+    print("note {} is in Key {}? {}\nNext Higher = {}\nNext Lower = {}\nscale degree = {}".format(
+          note, key, t, high, low, scaleDegree))
+    print("highByte = {}; noteByte = {}; lowByte = {}".format(high.getMIDIByte(), note.getMIDIByte(),
+          low.getMIDIByte()))
+
+def _testGetNumNotesInRange(args):
+    USAGE = "python3 {} <keyString> [noteLow] [noteHigh]".format(args[0])
+    if len(argv) > 3:
+        keyString = args[1]
+        key = Key(keyString)
+        note1 = pypond.Note(args[2])
+        note2 = pypond.Note(args[3])
+    else:
+        print(USAGE)
+        return
+    numNotes = key.getNumNotesInRange(note1, note2)
+    print("notes in range ({}, {}) = {}".format(note1, note2, numNotes))
+
 if __name__ == "__main__":
     import sys
     argv = sys.argv
     #_testTimeSignature(argv)
     #_testConfiguration(argv)
-    _testKey(argv)
+    #_testKey(argv)
+    _testIsInKey(argv)
+    #_testGetNumNotesInRange(argv)
 

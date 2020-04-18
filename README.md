@@ -40,14 +40,20 @@ _LILYEXEC = "lilypond.exe"
   logic (and that's a whole big thing).
 - The internal structure is a bit of a mess - need to have clear division of labor, reduce passing references
   up and down the inheritance chain.
-- muse.Key.getNotes() still returns wrong enharmonic equivalents for keys like "C#Maj" or "Fd"
 
-### Unimplemented - TODO (hopefully)
+### Unimplemented - TODO (hopefully):
 
-- Add key awareness, complete with choosing the correct enharmonic equivalent.
+- Add key signature!
 - Implement the circle of fifths; changing keys by interval or by traversing the circle.
 - Polyphony!
 - Lots of new algorithms...
+
+### Recent fixes/additions:
+
+- Support for +/- infinity octaves (rather than 0-9 only).
+- Support for multi-flat, multi-sharp notes (i.e. C###)
+- Messy, but ultimately accurate notes in a given key/scale
+- Addded key awareness, complete with choosing the correct enharmonic equivalent.
 
 Cheers,
 Keith
