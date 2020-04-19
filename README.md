@@ -35,6 +35,7 @@ _LILYEXEC = "lilypond.exe"
 
 ### Known bugs/wackiness to work out:
 
+- Still getting the wrong number of measures.  Figure that out, Keith.
 - Rhythms are still often written in a non-standard manner; that logic is surprisingly difficult.
 - In low-density music, rests are not combined and will look stupid.  This requires some type of lookback
   logic (and that's a whole big thing).
@@ -53,7 +54,8 @@ _LILYEXEC = "lilypond.exe"
 - Support for +/- infinity octaves (rather than 0-9 only).
 - Support for multi-flat, multi-sharp notes (i.e. C###)
 - Messy, but ultimately accurate notes in a given key/scale
-- Addded key awareness, complete with choosing the correct enharmonic equivalent.
+- Added key awareness, complete with choosing the correct enharmonic equivalent.
+- Added inclusion of key signature, clef, and time signature
 
 Cheers,
 Keith

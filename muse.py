@@ -244,6 +244,15 @@ class Key(object):
         qualityString = self.getQualityString()
         return tonicString + qualityString
 
+    def getKeyLily(self):
+        """Return the tonic and \\major \\minor according to GNU Lilypond syntax"""
+        keystring = self.tonic.asLilyNoteName()
+        if self.quality in (_KeyQuality.minor, _KeyQuality.dimwh, _KeyQuality.dimhw):
+            qualityString = pypond.LilySyntax.kwKeyMinor
+        else:
+            qualityString = pypond.LilySyntax.kwKeyMajor
+        return "{} {}".format(keystring, qualityString)
+
     def _setValidators(self):
         self._vNoteNames = ('a', 'b', 'c', 'd', 'e', 'f', 'g')
         self._vAccidentals = ('b', '#')
@@ -486,6 +495,11 @@ class _TimeSignature(object):
     def getMeasureDuration(self):
         return self.beatsPerMeasure/self.majorBeat
 
+    def asLily(self):
+        """Return the time signature string in GNU Lilypond syntax"""
+        # Currently the same as __str__(), but may change in the future
+        return "{}/{}".format(self.getBeatsPerMeasure(), self.getMajorBeat())
+
     def __repr__(self):
         return self.__str__()
 
@@ -520,6 +534,7 @@ class Configuration(object):
     _FilenameForceDefaults = '*'
     _ConfigCalls = {
         #Name               : (callable, defaultValue)
+        'clef'              : (theory.TheoryClass._clefParser, "treble"),
         'noteLowest'        : (pypond.Note, "A2"),
         'noteHighest'       : (pypond.Note, "C6"),
         'key'               : (Key, "CM"),

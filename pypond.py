@@ -71,6 +71,15 @@ _ENCODING_NOTES = {
 #    ""   : 0
 #}
 
+class LilySyntax():
+    kwClef = "\\clef"
+    kwKey = "\\key"
+    kwTimeSignature = "\\time"
+    kwKeyMajor = "\\major"
+    kwKeyMinor = "\\minor"
+    headerString = '\\version "2.20.0"\n{\n  '
+    footerString = '\n  \\bar "|."\n}'
+
 class Note(object):
     noteMIDIOffsets = {'c' : 0, 'd' : 2, 'e' : 4, 'f' : 5, 'g' : 7, 'a' : 9, 'b' : 11}
     flatChar = 'b'
@@ -314,6 +323,11 @@ class Note(object):
         o = self._getLilyOctave()
         d = self._getLilyDurationAligned(beatAlign)
         return "{}{}{}{}".format(n, a, o, d)
+
+    def asLilyNoteName(self):
+        n = self.getNoteLetter().lower()
+        a = self._getLilyAccidental()
+        return "{}{}".format(n, a)
 
     def setBeatDuration(self, beatDuration):
         dur = _float(beatDuration)

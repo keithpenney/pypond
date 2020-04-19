@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import pypond, muse
+import re
 
 def _rotate(l, n):
     """Return a copy of list/yuple 'l' as a list rotated by increment 'n'
@@ -10,12 +11,26 @@ def _rotate(l, n):
     return [l[(n + m) % length] for m in range(length)]
 
 class TheoryClass(object):
-    CircleOfFifths = ('c', 'g', 'd', 'a', 'e', 'b', 'f#', 'db', 'ab', 'eb', 'bb', 'f')
-    OrderOfFlats   = ('b', 'e', 'a', 'd', 'g', 'c', 'f')
-    SharpsMajor    = (1, 1, 1, 1, 1, 1, 0)
-    SharpsMinor    = (1, 1, 1, 0, 0, 0, 0)
-    fourthInterval = 5 # 5 half-steps make a perfect fourth
-    fifthInterval  = 7 # 7 half-steps make a perfect fifth
+    CircleOfFifths  = ('c', 'g', 'd', 'a', 'e', 'b', 'f#', 'db', 'ab', 'eb', 'bb', 'f')
+    OrderOfFlats    = ('b', 'e', 'a', 'd', 'g', 'c', 'f')
+    SharpsMajor     = (1, 1, 1, 1, 1, 1, 0)
+    SharpsMinor     = (1, 1, 1, 0, 0, 0, 0)
+    fourthInterval  = 5 # 5 half-steps make a perfect fourth
+    fifthInterval   = 7 # 7 half-steps make a perfect fifth
+    _clefTreble     = 'treble'
+    _reClefTreble   = re.compile("[Tt]((reble)|(REBLE))?$")
+    _clefBass       = 'bass'
+    _reClefBass     = re.compile("[Bb]((ass)|(ASS))?$")
+    _clefAlto       = 'alto'
+    _reClefAlto     = re.compile("[Aa]((lto)|(LTO))?$")
+    _clefTenor      = 'tenor'
+    _reClefTenor    = re.compile("[Tt]((enor)|(ENOR))$")
+    _encodingClef   = {
+        _clefTreble : 0,
+        _clefBass   : 1,
+        _clefAlto   : 2,
+        _clefTenor  : 3
+    }
 
     @classmethod
     def getKeyAtInterval(cls, key, interval):
@@ -82,6 +97,33 @@ class TheoryClass(object):
             return True
         else:
             return False
+
+    @classmethod
+    def _clefParser(cls, clefstring):
+        """Parse clef string input and return the corresponding encoding"""
+        if cls._reClefTreble.match(clefstring):
+            clefstring = cls._clefTreble
+        elif cls._reClefBass.match(clefstring):
+            clefstring = cls._clefBass
+        elif cls._reClefAlto.match(clefstring):
+            clefstring = cls._clefAlto
+        elif cls._reClefTenor.match(clefstring):
+            clefstring = cls._clefTenor
+        else:
+            raise Error_ClefParser("Cannot parse clef string: {}".format(clefstring))
+            return None
+        return cls._encodingClef[clefstring]
+
+    @classmethod
+    def _getClefString(cls, clef):
+        """Return the clef string corresponding to a particular clef integer"""
+        for item in cls._encodingClef.items():
+            if item[1] == clef:
+                return item[0]
+        return None
+
+class Error_ClefParser(Exception):
+    pass
 
 def _testTheoryClass(args):
     pass
