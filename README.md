@@ -35,7 +35,7 @@ _LILYEXEC = "lilypond.exe"
 
 ### Known bugs/wackiness to work out:
 
-- Still getting the wrong number of measures.  Figure that out, Keith.
+- Clearly doesn't know how to handle rests. Poor GNU Lilypond is left to figure out the mess.
 - Rhythms are still often written in a non-standard manner; that logic is surprisingly difficult.
 - In low-density music, rests are not combined and will look stupid.  This requires some type of lookback
   logic (and that's a whole big thing).
@@ -44,7 +44,6 @@ _LILYEXEC = "lilypond.exe"
 
 ### Unimplemented - TODO (hopefully):
 
-- Add key signature!
 - Implement the circle of fifths; changing keys by interval or by traversing the circle.
 - Polyphony!
 - Lots of new algorithms...
@@ -56,6 +55,7 @@ _LILYEXEC = "lilypond.exe"
 - Messy, but ultimately accurate notes in a given key/scale
 - Added key awareness, complete with choosing the correct enharmonic equivalent.
 - Added inclusion of key signature, clef, and time signature
+- May have fixed measure counting problem.
 
 Cheers,
 Keith

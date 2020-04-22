@@ -13,7 +13,7 @@
 import sys
 import re
 
-DEBUG = False
+DEBUG = True
 
 _LILYFLAT = 'es'
 _LILYSHARP = 'is'
@@ -345,8 +345,8 @@ class Note(object):
 
     def durationToMs(self, duration):
         if self.beatDuration == None or self.tempo == None:
-            _dbg("Unconfigured tempo. beatDuration = {}\ttempo = {}".format(\
-                      self.beatDuration, self.tempo))
+            #_dbg("Unconfigured tempo. beatDuration = {}\ttempo = {}".format(\
+            #          self.beatDuration, self.tempo))
             return None
         if duration == 0:
             _dbg("Invalid duration {}".format(duration))

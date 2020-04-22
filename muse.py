@@ -93,6 +93,22 @@ class MelodyAlgorithm(object):
         note = self.getNextNote()
         return note.asLily()
 
+class MAFixed(MelodyAlgorithm):
+    #pattern = [1, 1/8, 1/2, 1/8 + 1/4, 1/16 + 1/2, 1/8, 1/16 + 1/8, 1/2, 1/4, 1, 1/2 + 1/4 + 1/16] 
+    pattern = [1, 1, 1]
+    def __init__(self):
+        super().__init__(None)
+        self.index = 0
+
+    def getNextNote(self):
+        dur = self.pattern[self.index]
+        if self.index >= len(self.pattern) - 1:
+            self.index = 0
+        else:
+            self.index += 1
+        return pypond.Note('C4', dur)
+
+
 class MARandom(MelodyAlgorithm):
     def __init__(self):
         super().__init__(None)
@@ -419,7 +435,7 @@ class Key(object):
             if keynote.isEqualNote(note):
                 match = True
         octave = note.getOctave()
-        print("octave = {}".format(octave))
+        #print("octave = {}".format(octave))
         nextHigher.setOctave(octave)
         if nextHigher.getMIDIByte() < note.getMIDIByte():
             nextHigher.setOctave(octave + 1)

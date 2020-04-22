@@ -57,15 +57,23 @@ class Composer():
         #tiesymbol = pypond._LILYTIE
         startBeat = self.beatCount
         note = self.algorithm.getNextNote()
-        notes = self.splitAtMeasures(note)  # modifies self.beatCount
+        notes, beats = self.splitAtMeasures(note)  # modifies self.beatCount
+        slist = [notes[n].asLily(beats[n]) for n in range(len(notes))]
+        if len(slist) > 1:
+            for n in range(len(slist) - 1):
+                slist[n] += pypond.Note._lilyTie
+        return slist
+        """
         if len(notes) > 1:
             return (notes[0].asLily(startBeat) + notes[0]._lilyTie, notes[1].asLily())
         else:
             return (notes[0].asLily(startBeat),)      # TODO Handle ties in GNU lilypond format
+        """
         
         #return (x.asLily(self.beatCount) for x in notes)
 
-    def splitAtMeasures(self, note):
+    def splitAtMeasuresOLD(self, note):
+        """Feel free to delete this"""
         # figure out the math here
         noteDuration = note.getDuration()
         noteLength = noteDuration # recall duration not stored as reciprocol units
@@ -95,6 +103,38 @@ class Composer():
             return (note1, note2)
         else:
             return (note1,)
+
+    def splitAtMeasures(self, note):
+        """Let's try to accomodate the case of notes spanning more than two measures."""
+        noteLength = note.getDuration()
+        _dbg("=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=")
+        _dbg("beatCount = {}; noteLength = {}; measureCount = {}".format(
+             self.beatCount, noteLength, self.measureCount))
+        noteDurations = []
+        alignBeats = [self.beatCount]
+        while self.beatCount + noteLength >= self.measureDuration:  # If the note would continue beyond the bar
+            tempDur = self.measureDuration - self.beatCount         # Pop off the duration to fill the measure
+            noteLength -= tempDur                                   # Subtract that duration from the previous
+            noteDurations.append(tempDur)                           # and add it to the list
+            self.measureCount += 1                                  # Increment the measure count
+            if self.measureCount == self.numMeasures:               # If we hit the max measures
+                self.finished = True                                # terminate the composition
+                break                                               # and quit tallying up notes
+            self.beatCount = 0                                      # And reset the beat count
+            alignBeats.append(self.beatCount)
+        if not self.finished and noteLength != 0:
+            if self.beatCount + noteLength < self.measureDuration:      # If the note won't span the bar
+                noteDurations.append(noteLength)                        # Append the full duration to the list
+                self.beatCount += noteLength                            # And update the beat count
+                alignBeats.append(self.beatCount)
+
+        noteList = []
+        for n in range(len(noteDurations)):
+            newnote = note.copy()
+            newnote.setDuration(noteDurations[n])
+            noteList.append(newnote)
+        _dbg("noteDurations = {}".format(noteDurations))
+        return (noteList, alignBeats)
 
     @staticmethod
     def _invert(length):
