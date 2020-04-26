@@ -130,8 +130,8 @@ class Note(object):
         if 'accidental' == None, uses self.accidental"""
         if accidental == None:
             accidental = self.getAccidental()
-        else:
-            accidental = _int(accidental)
+        #print("accidental = {}".format(accidental))
+        accidental = _int(accidental)
         sign = 0
         self.naturalChar
         if accidental > 0:
@@ -729,7 +729,8 @@ class Rest(Note):
         return Rest(self.duration)
 
     def __repr__(self):
-        return "Rest({})".format(self.getNoteString())
+        dur = str(self.getDuration())
+        return "Rest({})".format(dur)
 
     def copy(self):
         return self.new(self.duration)
@@ -895,6 +896,8 @@ def _testRest(args):
         restDuration = _float(args[1])
         rest = Rest(restDuration)
         print("rest = {} = {}".format(rest, rest.asLily()))
+    else:
+        print(USAGE)
 
 def _testNoteSharpFlat(args):
     USAGE = "Usage:\n\tpython3 {0} [NoteString]\n\tpython3 {0} [NoteString] [s,f]".format(sys.argv[0])
@@ -928,7 +931,8 @@ def _testNoteGetInterval(args):
     elif len(argv) > 1:
         noteName = argv[1]
         note = Note(noteName)
-        note._print()
+        print(str(note))
+        #note._print()
     else:
         print(USAGE)
 
@@ -939,6 +943,6 @@ if __name__ == "__main__":
     #_testNoteCopy(argv)
     #_testNoteDuration(argv)
     #_testGetPitchFromNoteString(argv)
-    #_testRest(argv)
+    _testRest(argv)
     #_testNoteSharpFlat(argv)
-    _testNoteGetInterval(argv)
+    #_testNoteGetInterval(argv)

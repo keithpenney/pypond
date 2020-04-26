@@ -10,7 +10,7 @@
 # TODO Dotted notes need to know when to break across measures
 
 import os, subprocess
-import muse, pypond, theory
+import muse, pypond, theory, fifo
 import time
 
 DEBUG = False
@@ -48,7 +48,20 @@ class Composer():
         self.measureCount = 0
         self.beatCount = 0
         self.measureDuration = self.config.getMeasureDuration()
-        self.finished = False
+        self.initBuffer()
+        self.finished = False       # Terminates the composition process
+
+    def initBuffer(self, bufferDepth = 3):
+        self._buffer = fifo.FIFO(int(bufferDepth), blockOnFull = False)
+
+    def inspectBuffer(self, index):
+        return self._buffer[index]
+
+    def addToBuffer(self, item):
+        return self._buffer.add(item)
+
+    def getFromBuffer(self):
+        return self._buffer.get()
 
     def getNextNoteLilyOLD(self):
         return self.algorithm.getNextNoteLily()
@@ -58,6 +71,9 @@ class Composer():
         startBeat = self.beatCount
         note = self.algorithm.getNextNote()
         notes, beats = self.splitAtMeasures(note)  # modifies self.beatCount
+        for n in range(len(notes)):
+            self.addToBuffer((notes[n], beats[n]))
+        print(self._buffer)
         slist = [notes[n].asLily(beats[n]) for n in range(len(notes))]
         if len(slist) > 1:
             for n in range(len(slist) - 1):
