@@ -93,7 +93,7 @@ class Note(object):
     _reFlat = re.compile(flatChar + "+$")
     _reSharp = re.compile(sharpChar + "+$")
     _lilyTie = "~ "
-    def __init__(self, notestring, duration = None):
+    def __init__(self, notestring, duration = None, isTied = False):
         self.noteString = notestring
         self.noteName = Note._NoteNameFromString(notestring)
         self.accidental = Note._AccidentalFromString(notestring)
@@ -101,7 +101,8 @@ class Note(object):
         self.duration = None
         self.tempo = None           # Use self.setTempo() to configure tempo for MIDI
         self.beatDuration = None    # the duration note that gets the beat (at self.tempo)
-        self.durationMs = None      # self.setDuration() 
+        self.durationMs = None      # self.setDuration()
+        self.isTied = isTied
         # Requires configuration of self.setBeatDuration() and self.setTempo() first
         if duration != None:
             self.setDuration(duration)
@@ -212,6 +213,8 @@ class Note(object):
                     duration -= ddur
                     ll.append("{}{}".format(tieSymbol, str(2**index)))
                     tieSymbol = self._lilyTie
+                    alignBeat += ddur   # Give that duration to the alignBeat
+                    nBeats = self.parseBeatLength(alignBeat)    # then parse the beat again
         _dbg("After walk up: {}".format("".join(ll)))
         _dbg("new duration = {}".format(duration))
         # Now we walk down the parsed remainder of the note duration
@@ -316,13 +319,20 @@ class Note(object):
         return (wholeNotes, halfNotes, quarterNotes, eighthNotes, sixteenthNotes,
                 thirtySecondNotes, sixtyFourthNotes)
 
+    def _getLilyTie(self):
+        if self.getTie():
+            return self._lilyTie
+        else:
+            return ""
+
     def asLily(self, beatAlign = None):
         """Return a string of the GNU lilypad representation of the note."""
         n = self.getNoteName()[0].lower()
         a = self._getLilyAccidental()
         o = self._getLilyOctave()
         d = self._getLilyDurationAligned(beatAlign)
-        return "{}{}{}{}".format(n, a, o, d)
+        t = self._getLilyTie()
+        return "{}{}{}{}{}".format(n, a, o, d, t)
 
     def asLilyNoteName(self):
         n = self.getNoteLetter().lower()
@@ -695,6 +705,21 @@ class Note(object):
         if note = G#, note.flat() = G"""
         return self.alter(-1)
 
+    def getTie(self):
+        """Returns True if this note is tied to the subsequent note.
+        Only meaningful in sheet music."""
+        return self.isTied
+
+    def setTie(self, tie):
+        """Set the 'isTied' flag to declare that this note is tied
+        to a subsequent note (only meaningful in sheet music)."""
+        if tie == None:
+            return
+        if tie:
+            self.isTied = True
+        else:
+            self.isTied = False
+
     @classmethod
     def new(cls, notestring, duration = None):
         return cls(notestring, duration)
@@ -710,11 +735,16 @@ class Note(object):
         print(self._summary())
 
 class Rest(Note):
-    _lilyTie = " "
+    _lilyTie = " r" # HACK ALERT! This might work, but it's a band-aid on a stab wound
     def __init__(self, duration = None):
         super().__init__(notestring = None, duration = duration)
         self.noteName = 'r'
         self.noteString = 'r'
+        self.isTied = False
+
+    def setTie(self, tie):
+        """Rests are never tied."""
+        return
 
     def _getLilyAccidental(self):
         """A rest has no accidental"""
@@ -738,6 +768,13 @@ class Rest(Note):
     @classmethod
     def new(cls, duration):
         return cls(duration)
+
+    def __add__(self, rest):
+        if hasattr(rest, 'getDuration'):
+            duration = rest.getDuration()
+        elif isinstance(rest, float):
+            duration = rest
+        return self.new(self.getDuration() + duration)
 
 def _dbg(*args, **kwargs):
     if DEBUG:
@@ -892,7 +929,13 @@ def _testGetPitchFromNoteString(args):
 
 def _testRest(args):
     USAGE = "Usage:\n\tpython3 {0} <RestDuration>".format(sys.argv[0])
-    if len(args) > 1:
+    if len(args) > 2:
+        restDuration1 = _float(args[1])
+        restDuration2 = _float(args[2])
+        rest1 = Rest(restDuration1)
+        rest2 = Rest(restDuration2)
+        print(rest1 + rest2)
+    elif len(args) > 1:
         restDuration = _float(args[1])
         rest = Rest(restDuration)
         print("rest = {} = {}".format(rest, rest.asLily()))

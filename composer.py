@@ -73,7 +73,8 @@ class Composer():
         notes, beats = self.splitAtMeasures(note)  # modifies self.beatCount
         for n in range(len(notes)):
             self.addToBuffer((notes[n], beats[n]))
-        print(self._buffer)
+        #print(self._buffer)
+        
         slist = [notes[n].asLily(beats[n]) for n in range(len(notes))]
         if len(slist) > 1:
             for n in range(len(slist) - 1):

@@ -55,7 +55,9 @@ _LILYEXEC = "lilypond.exe"
 - Messy, but ultimately accurate notes in a given key/scale
 - Added key awareness, complete with choosing the correct enharmonic equivalent.
 - Added inclusion of key signature, clef, and time signature
-- May have fixed measure counting problem.
+- May have fixed measure counting problem... yeah, I think so.
+- Complicated the note duration calculation process further, but the results are better in terms
+  of standard rhythm notation.  This ultimately needs to be reimplemented in a more elegant manner.
 
 Cheers,
 Keith
