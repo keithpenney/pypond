@@ -30,10 +30,27 @@ import pypond, theory
 import random
 
 DEBUG = True
+LOGFILE = None
+FILENAME = "muse.py"
+
+# This is a wacky forward declaration temporary fix 
+def _float(s):
+    if isinstance(s, float):
+        return s
+    try:
+        r = float(s)
+        return r
+    except ValueError:
+        pass
+    if '/' in s:
+        r = _eval(s)
+        return r
+    return r
 
 class MelodyAlgorithm(object):
     def __init__(self, configuration = None):
-        # Ultimately a configuration should go here
+        # Most/all of these get overwritten by a valid configuration.
+        # These provide defaults in case the configuration doesn't
         self.numNotes = 16
         self.minPitch = 36    # Min pitch. This will eventually come from the configuration file
         self.maxPitch = 96  # Max pitch
@@ -58,11 +75,15 @@ class MelodyAlgorithm(object):
         self.density = config.get('density', None)
         if self.density == None:
             self.density = 1.0
-        print("self.density = {}".format(self.density))
+        #print("self.density = {}".format(self.density))
         self.key = config.get('key')
         self.keyNoteMin = config.get('keyNoteMin')
         self.keyNoteMax = config.get('keyNoteMax')
         self.numRange = self.key.getNumNotesInRange(self.keyNoteMin, self.keyNoteMax)
+        self.shortestNote = config.get('shortestNote')
+        self.longestNote = config.get('longestNote')
+        self.minDurationPwr2 = config._invLog2(self.shortestNote)
+        self.maxDurationPwr2 = config._invLog2(self.longestNote)
 
     def getNoteInKey(self, n):
         """Get a note within the key by a float from 0 to 1, which will be
@@ -523,8 +544,6 @@ class _TimeSignature(object):
         return "{}/{}".format(self.getBeatsPerMeasure(), self.getMajorBeat())
 
 
-
-
 def _AlgorithmParser(algorithm):
     """Parse the string 'algorithm' and match it to a Python class which
     inherits from MelodyAlgorithm; returning an instance of the class or
@@ -558,7 +577,9 @@ class Configuration(object):
         'timeSignature'     : (_TimeSignature, "4/4"),
         'algorithm'         : (_AlgorithmParser, "MARandom"),
         'numMeasures'       : (int, 8),
-        'density'           : (float, 1.0),
+        'density'           : (_float, 1.0),
+        'shortestNote'      : (_float, 1/64),
+        'longestNote'       : (_float, 1)
     }
     def __init__(self, filename = None):
         self.filename = filename
@@ -567,10 +588,10 @@ class Configuration(object):
                 items = self.useDefaults()
             else:
                 items = self.readIni()
-            print("{} read {} items; used defaults for {} items".format(
+            _dbg("{} read {} items; used defaults for {} items".format(
                   self.__str__(), items[0], items[1]))
         else:
-            print("{} uninitialized.  Call self.readIni(filename) or \
+            _dbg("{} uninitialized.  Call self.readIni(filename) or \
                   self.useDefaults() before using.")
 
     def readIni(self, filename = None):
@@ -604,12 +625,12 @@ class Configuration(object):
             else:
                 userCount += 1
             self.config[item[0]] = item[1][0](val)  # Add to self.config using the corresponding callable
-            print("config({}) = {}".format(item[0], val))
+            _dbg("config({}) = {}".format(item[0], val))
             self._configStrings[item[0]] = val      # Add the string name to self._configStrings
         # = =  Add derived quantities = = 
         noteMin = self.config.get('noteLowest')
         noteMax = self.config.get('noteHighest')
-        print("noteMin = {}; noteMax = {}".format(noteMin, noteMax))
+        _dbg("noteMin = {}; noteMax = {}".format(noteMin, noteMax))
         keyNoteMin, keyNoteMax = self.getKeyNoteRange(noteMin, noteMax)
         self.config['keyNoteMin'] = keyNoteMin
         self.config['keyNoteMax'] = keyNoteMax
@@ -622,11 +643,11 @@ class Configuration(object):
 
     def getKeyNoteRange(self, noteMin, noteMax):
         key = self.config.get('key')
-        print("key = {}".format(key))
+        _dbg("key = {}".format(key))
         mint, minlow, minhigh = key.isInKey(noteMin)
         maxt, maxlow, maxhigh = key.isInKey(noteMax)
-        print("noteMin = {}; in key? {}".format(noteMin, mint))
-        print("noteMax = {}; in key? {}".format(noteMax, maxt))
+        _dbg("noteMin = {}; in key? {}".format(noteMin, mint))
+        _dbg("noteMax = {}; in key? {}".format(noteMax, maxt))
         if not mint:
             noteMin = minhigh
         if not maxt:
@@ -654,7 +675,26 @@ class Configuration(object):
             raise Error_InvalidConfig("Configuration._configStrings = None!")
             return defaultVal
         return self._configStrings.get(key, defaultVal)
-        
+
+    @staticmethod
+    def _invLog2(x):
+        y = 0
+        inv = 1/x
+        while inv > 1:
+            inv /= 2
+            y += 1
+        return y
+
+def _eval(s):
+    """A safer version of eval, primarily for evaluating simple arithmetic expressions in
+    string form."""
+    l = []
+    safechars = ('/', '+', '-', '*', '.', ')', '(')
+    for c in s:
+        if c.isdigit() or c in safechars:
+            l.append(c)
+    return eval(''.join(l))
+
 class Error_InvalidConfig(Exception):
     pass
 
@@ -663,7 +703,9 @@ class Error_FileNotFound(Exception):
 
 def _dbg(*args, **kwargs):
     if DEBUG:
-        print(*args, **kwargs)
+        if LOGFILE != None:
+            print("[{}]\t".format(FILENAME), file = LOGFILE, end = '')
+            print(*args, **kwargs, file = LOGFILE)
 
 def _testTimeSignature(args):
     USAGE = "python3 {} <key>".format(argv[0])
@@ -733,6 +775,7 @@ def _testGetNumNotesInRange(args):
 if __name__ == "__main__":
     import sys
     argv = sys.argv
+    FILENAME = argv[0]
     #_testTimeSignature(argv)
     #_testConfiguration(argv)
     #_testKey(argv)

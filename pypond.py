@@ -14,6 +14,8 @@ import sys
 import re
 
 DEBUG = True
+LOGFILE = None
+FILENAME = "pypond.py"
 
 _LILYFLAT = 'es'
 _LILYSHARP = 'is'
@@ -79,6 +81,40 @@ class LilySyntax():
     kwKeyMinor = "\\minor"
     headerString = '\\version "2.20.0"\n{\n  '
     footerString = '\n  \\bar "|."\n}'
+    lilyTie = "~ "
+    lilyDot = "."
+    lilyFlat = "es"
+    lilySharp = "is"
+    encodingAccidentals = {
+        lilyFlat    : -1,
+        lilySharp   : 1
+    }
+    _reFlat = re.compile(lilyFlat+ "+")
+    _reSharp = re.compile(lilySharp + "+")
+    defaultOctave = 4
+    octaveUp = "'"
+    octaveDown = ','
+ 
+    @classmethod
+    def _DecodeAccidentalString(cls, sAccidental):
+        """Return the encoding (integer) corresponding to a particular
+        GNU Lilypond accidental.  Handles up to infinity sharp and infinity flat."""
+        sAcc = sAccidental.strip()
+        # Strip non-accidental content
+        index = 0
+        for n in range(len(sAcc)):
+            if (sAcc[n] not in cls.lilyFlat) and (sAcc[n] not in cls.lilySharp):
+                index = n
+                break
+        sAcc = sAcc[:index]
+        encFlat = cls.encodingAccidentals.get(cls.lilyFlat, None)
+        encSharp = cls.encodingAccidentals.get(cls.lilySharp, None)
+        if cls._reFlat.match(sAcc):
+            return encFlat*len(sAcc)//2
+        elif cls._reSharp.match(sAcc):
+            return encSharp*len(sAcc)//2
+        else:
+            return 0
 
 class Note(object):
     noteMIDIOffsets = {'c' : 0, 'd' : 2, 'e' : 4, 'f' : 5, 'g' : 7, 'a' : 9, 'b' : 11}
@@ -103,6 +139,9 @@ class Note(object):
         self.beatDuration = None    # the duration note that gets the beat (at self.tempo)
         self.durationMs = None      # self.setDuration()
         self.isTied = isTied
+        self.measureNum = None
+        self.beatNum = None
+        self.dotted = False
         # Requires configuration of self.setBeatDuration() and self.setTempo() first
         if duration != None:
             self.setDuration(duration)
@@ -110,6 +149,9 @@ class Note(object):
             _dbg("Warning!  This Note object is no good: {}".format(self.__repr__()))
         #self.noteString = self.getNoteLetter() + self.getAccidentalString() + str(self.getOctave())
         #print("__init__ : self = {}".format(self))
+
+    def isRest(self):
+        return False
 
     def getNoteName(self):
         """Returns the note name as a lower-case string"""
@@ -186,6 +228,7 @@ class Note(object):
         else:
             return "," * (_LILYMIDDLEOCTAVE - o)
 
+    #@DEPRECATED!
     def _getLilyDurationAligned(self, alignBeat):
         """First parse the alignBeat, then walk from LS-to-MS through the alignBeat parse
         and 'fill in the holes' taking from the note duration.  Once the beat has rounded
@@ -194,9 +237,11 @@ class Note(object):
 
         On the first pass (LS-to-MS), we don't need to worry about dotting notes."""
         # Hmmm... didn't seem to get it right.  Poke further into this
-        _dbg("  -   -   -   -   -   -   -   -\nalignBeat = {}".format(alignBeat))
+        _dbg("  -   -   -   -   -   -   -   - alignBeat = {}".format(alignBeat))
         if alignBeat == None:
-            return self._getLilyDuration()
+            alignBeat = self.getBeatNum()
+            if alignBeat == None:
+                return self._getLilyDuration()
         if self.duration == None:
             return ""
         duration = self.duration        # Need a shallow copy since we'll be modifying this
@@ -235,6 +280,24 @@ class Note(object):
         _dbg("After walk down: {}".format("".join(ll)))
         return "".join(ll)
 
+    def _isBasisDuration(self):
+        """Returns True if the note is a basis note (whole, half, quarter, eighth, 1/16, 1/32, 1/64)
+        Returns False if the note is a combination of basis notes."""
+        invdur = 1/self.getDurationNoDot()
+        if invdur % 1 > 0:
+            return False
+        else:
+            return True
+
+    @staticmethod
+    def _invLog2(x):
+        y = 0
+        inv = 1/x
+        while inv > 1:
+            inv /= 2
+            y += 1
+        return y
+
     def _getLilyDuration(self, alignBeat = None):
         """Get the duration indication in GNU lilypond format.
         For a power-of-two (i.e. quarter note, eighth note, whole note, etc.), we simply
@@ -256,6 +319,8 @@ class Note(object):
         # durations (or dotted durations) with tildes (~) between them.
         if self.duration == None:
             return ""
+        if self._isBasisDuration():
+            return int(1/self.getDurationNoDot())
         length = self.duration # non-reciprocal units
         nNotes = self.parseBeatLength(length)
         nNotes = [x for x in nNotes]    # Need to convert tuple to a list to modify contents
@@ -294,7 +359,7 @@ class Note(object):
         """Parse a beat length into number of whole notes, half notes, quarter notes, etc...
         The beat length should be 1/2 or a half note, 1/4 for a quarter note (non-reciprocal
         units).
-        Returns (nWhole, nHalf, nQuarter, n8th, n16th, n32nd, n64th)
+        Returns [nWhole, nHalf, nQuarter, n8th, n16th, n32nd, n64th]
         
         Here we're basically just representing a duration in a binary system with 1/64th as
         the least-significant (LS) bit and a whole note as the most-significant (MS) bit.
@@ -308,31 +373,29 @@ class Note(object):
         32 = 1/2 note
         64 = whole note
         Any other number is simply a combination of these."""
-        length = int(length * 64)    # Round to the 64th note
-        wholeNotes = (length & (1 << 6)) >> 6
-        halfNotes = (length & (1 << 5)) >> 5
-        quarterNotes = (length & (1 << 4)) >> 4
-        eighthNotes = (length & (1 << 3)) >> 3
-        sixteenthNotes = (length & (1 << 2)) >> 2
-        thirtySecondNotes = (length & (1 << 1)) >> 1
-        sixtyFourthNotes = length & 1
-        return (wholeNotes, halfNotes, quarterNotes, eighthNotes, sixteenthNotes,
-                thirtySecondNotes, sixtyFourthNotes)
+        return [int(x) for x in "{:07b}".format(int(length*64))]
 
     def _getLilyTie(self):
         if self.getTie():
-            return self._lilyTie
+            return LilySyntax.lilyTie
         else:
             return ""
 
-    def asLily(self, beatAlign = None):
+    def _getLilyDot(self):
+        if self.getDot():
+            return LilySyntax.lilyDot
+        else:
+            return ""
+
+    def asLily(self):
         """Return a string of the GNU lilypad representation of the note."""
         n = self.getNoteName()[0].lower()
         a = self._getLilyAccidental()
         o = self._getLilyOctave()
-        d = self._getLilyDurationAligned(beatAlign)
+        d = self._getLilyDuration()
+        s = self._getLilyDot()
         t = self._getLilyTie()
-        return "{}{}{}{}{}".format(n, a, o, d, t)
+        return "{}{}{}{}{}{}".format(n, a, o, d, s, t)
 
     def asLilyNoteName(self):
         n = self.getNoteLetter().lower()
@@ -345,6 +408,18 @@ class Note(object):
             raise Error_Float("Cannot parse {}".format(beatDuration))
             return
         self.beatDuration = dur
+
+    def getDurationDecomposed(self, reciprocal = True):
+        nBeats = self.parseBeatLength(self.getDuration())
+        s = []
+        for n in range(len(nBeats)):
+            if nBeats[n]:
+                m = 2**n
+                if not reciprocal:
+                    s.append("1/{}".format(m))
+                else:
+                    s.append(str(m))
+        return "+".join(s)
 
     def setTempo(self, tempoBPM):
         tempo = _float(tempoBPM)
@@ -364,7 +439,15 @@ class Note(object):
         return (1000 * 60 * self.beatDuration * duration) / self.tempo
 
     def getDuration(self):
-        """Return the note duration as a float (i.e. 0.125 = 1/8 for an eighth note)"""
+        """Return the note duration as a float (i.e. 0.125 = 1/8 for an eighth note)
+        Includes effect of dotting."""
+        if self.getDot():
+            return self.duration*1.5
+        else:
+            return self.duration
+
+    def getDurationNoDot(self):
+        """Return the note duration ignoring dotting."""
         return self.duration
 
     def getDurationReciprocal(self):
@@ -499,6 +582,63 @@ class Note(object):
             return notestring[0].upper()
 
     @classmethod
+    def _NoteNameFromLilyString(cls, lilystring):
+        if lilystring == None:
+            return ""
+        lilystring = lilystring.strip()
+        notenames = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'r'] # Allow for rest too
+        if (len(lilystring) < 1):
+            _dbg("Empty lilystring")
+            return None
+        if lilystring[0].lower() not in notenames:
+            _dbg("Note name not valid: {}".format(lilystring[0]))
+            return None
+        if lilystring[0] == 'r':
+            return 'r'
+        if len(lilystring) > 1:
+            accidental = ''
+            t, c = cls._isAccidentalCharLily(lilystring[1:])
+            #print("_isAccidentalCharLily: {}, {}".format(t, c))
+            if t:
+                accidental = c
+            return lilystring[0].upper() + accidental
+        else:
+            return lilystring[0].upper()
+
+    @classmethod
+    def _DecodeLilyDuration(cls, lilystring):
+        nl = []
+        for c in lilystring:
+            if c.isdigit():
+                nl.append(c)
+        invdur = _int(''.join(nl))
+        if invdur == None:
+            return 1
+        return 1/invdur
+
+    @classmethod
+    def _DecodeLilyOctave(cls, lilystring):
+        octave = LilySyntax.defaultOctave
+        for c in lilystring:
+            if c == LilySyntax.octaveUp:
+                octave += 1
+            elif c == LilySyntax.octaveDown:
+                octave -= 1
+        return octave
+
+    @classmethod
+    def _DecodeLilyTie(cls, lilystring):
+        if not hasattr(lilystring, '__len__'):
+            return False
+        if lilystring == '':
+            return False
+        tied = False
+        for c in lilystring:
+            if c == LilySyntax.lilyTie[0]:
+                tied = True
+        return tied
+
+    @classmethod
     def _AccidentalFromString(cls, notestring):
         """Parse the accidental from a notestring.  E.g.
         notestring      Accidental
@@ -607,6 +747,26 @@ class Note(object):
         if acc == None:
             f = False
         else:
+            f = True
+        return (f, acc)
+
+    @classmethod
+    def _isAccidentalCharLily(cls, accstr):
+        if len(accstr) > 1:
+            chars = accstr[:2]
+        else:
+            return (False, None)
+        acc = LilySyntax.encodingAccidentals.get(chars, None)
+        if acc == None:
+            # No accidental
+            f = False
+        else:
+            # Accidental
+            #print("accstr = {}".format(accstr))
+            accint = LilySyntax._DecodeAccidentalString(accstr) # Get the integer encoding
+            #print("accint = {}".format(accint))
+            acc = cls._DecodeAccidentalInt(accint)  # Decode as standard syntax (b/#)
+            #print("acc = {}".format(acc))
             f = True
         return (f, acc)
 
@@ -720,9 +880,59 @@ class Note(object):
         else:
             self.isTied = False
 
+    def setDot(self, dotted):
+        if dotted:
+            self.dotted = True
+        else:
+            self.dotted = False
+
+    def getDot(self):
+        return self.dotted
+
+    def setBeatNum(self, beatNum):
+        beatNum = _float(beatNum)   # Sanitize input
+        if beatNum == None:
+            return False
+        self.beatNum = beatNum
+        return True
+
+    def getBeatNum(self):
+        return self.beatNum
+
+    def setMeasureNum(self, measureNum):
+        measureNum = _int(measureNum)   # Sanitize input
+        if measureNum == None:
+            return False
+        self.measureNum = measureNum
+        return True
+
+    def getMeasureNum(self):
+        return self.measureNum
+
     @classmethod
     def new(cls, notestring, duration = None):
         return cls(notestring, duration)
+
+    @classmethod
+    def fromLily(cls, lilystring):
+        """Create a new Note object from a GNU Lilypond string."""
+        if lilystring == None:
+            return ''
+        if len(lilystring) < 1:
+            return ''
+        name = cls._NoteNameFromLilyString(lilystring)
+        if name == None:
+            return None
+        dur = cls._DecodeLilyDuration(lilystring)
+        octave = cls._DecodeLilyOctave(lilystring)
+        if name == 'r':
+            note = Rest.new(dur)
+        else:
+            note = cls.new(name + str(octave), dur)
+        tie = cls._DecodeLilyTie(lilystring)
+        if tie:
+            note.setTie(True)
+        return note
 
     def __repr__(self):
         return "{}".format(self.getNoteString())
@@ -730,6 +940,18 @@ class Note(object):
     def _summary(self):
         return "{} = {} =\t{} (MIDI)\t{} (lilypond)".format(self.getNoteString(), 
               self.getNoteName(), self.getMIDIByte(), self.asLily())
+
+    def _shortSummary(self):
+        dur = self.getDuration()
+        if dur == None:
+            dur = '-'
+        else:
+            dur = int(1/dur)
+        if self.getDot():
+            dot = '.'
+        else:
+            dot = ""
+        return "{:}{:d}{}".format(self.getNoteName(), dur, dot)
 
     def _print(self):
         print(self._summary())
@@ -741,6 +963,9 @@ class Rest(Note):
         self.noteName = 'r'
         self.noteString = 'r'
         self.isTied = False
+
+    def isRest(self):
+        return True
 
     def setTie(self, tie):
         """Rests are never tied."""
@@ -770,15 +995,20 @@ class Rest(Note):
         return cls(duration)
 
     def __add__(self, rest):
+        """Gets the beat number from the first operand."""
         if hasattr(rest, 'getDuration'):
             duration = rest.getDuration()
         elif isinstance(rest, float):
             duration = rest
-        return self.new(self.getDuration() + duration)
+        temp = self.new(self.getDuration() + duration)
+        temp.setBeatNum(self.getBeatNum())
+        return temp
 
 def _dbg(*args, **kwargs):
     if DEBUG:
-        print(*args, **kwargs)
+        if LOGFILE != None:
+            print("[{}]\t".format(FILENAME), file = LOGFILE, end = '')
+            print(*args, **kwargs, file = LOGFILE)
 
 def _isDigit(c):
     if isinstance(c, int):
@@ -857,11 +1087,13 @@ def _int(s):
     return None
 
 def _float(s):
+    if s == None:
+        return None
     if isinstance(s, float):
         return s
     try:
         r = float(s)
-    except ValueError:
+    except (ValueError, TypeError):
         return None
     return r
 
@@ -979,13 +1211,24 @@ def _testNoteGetInterval(args):
     else:
         print(USAGE)
 
+def _testNoteFromLily(args):
+    USAGE = "Usage:\n\tpython3 {0} [LilyString]".format(sys.argv[0])
+    if len(argv) > 1:
+        lilystring = argv[1]
+        note = Note.fromLily(lilystring)
+        print("{}\tDuration = {}\tTie = {}".format(note, note.getDuration(), note.getTie()))
+    else:
+        print(USAGE)
+
 if __name__ == "__main__":
     import sys
     argv = sys.argv
+    FILENAME = argv[0]
     #_testNoteInterval(argv)
     #_testNoteCopy(argv)
     #_testNoteDuration(argv)
     #_testGetPitchFromNoteString(argv)
-    _testRest(argv)
+    #_testRest(argv)
     #_testNoteSharpFlat(argv)
     #_testNoteGetInterval(argv)
+    _testNoteFromLily(argv)

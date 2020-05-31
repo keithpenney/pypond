@@ -1,0 +1,18 @@
+[muse.py]	config(clef) = treble
+[muse.py]	config(noteLowest) = A3
+[muse.py]	config(noteHighest) = C6
+[muse.py]	config(key) = EbMaj
+[muse.py]	config(diatonicity) = 0
+[muse.py]	config(timeSignature) = 4/4
+[muse.py]	config(algorithm) = MARandom
+[muse.py]	config(numMeasures) = 32
+[muse.py]	config(density) = 0.5
+[muse.py]	config(shortestNote) = 1/16
+[muse.py]	config(longestNote) = 1
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = Ebmaj
+[muse.py]	noteMin = A3; in key? False
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	Configuration(cfg.ini) read 11 items; used defaults for 0 items
+[muse.py]	self.minPitch = 57; = 84
+[composer.py]	opening MARandom_200530_224912.ly

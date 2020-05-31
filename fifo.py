@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 
 # A python FIFO implementation
-# Configurable depth and blocking.
-# Indexable (i.e. fifo[n] returns the nth item waiting in the buffer)
+# * Configurable depth and blocking.
+# * Indexable (i.e. fifo[n] returns the nth item waiting in the buffer)
+#   Indexes go oldest-to-newest (i.e. 0 is the least-recently added item, -1 is the most-recently added)
+# * len(fifo) returns the number of items pending in the fifo
 
 class FIFO(object):
     def __init__(self, bufferDepth = 3, blockOnFull = True):
@@ -72,6 +74,9 @@ class FIFO(object):
         else:
             return (self._addPtr + self._depth - self._getPtr) % self._depth
 
+    def __len__(self):
+        return self.getNumItems()
+
     def __getitem__(self, index):
         index = self._convertGetIndex(index)
         if index == None:
@@ -79,28 +84,32 @@ class FIFO(object):
         return self._buffer[index]
 
     def __setitem__(self, key, value):
-        """Note slicable in the current implementation"""
+        """Not sliceable in the current implementation"""
         try:
             key = int(key)
         except ValueError:
             raise TypeError("Buffer index must be an integer")
-        print("key = {}".format(key))
+        #print("key = {}".format(key))
         index = self._convertSetIndex(key)
-        print("index = {}".format(index))
+        #print("index = {}".format(index))
         if index == None:
             return False
         self._buffer[index] = value
         return True
 
     def _convertGetIndex(self, index):
+        if index < 0:   # If index is negative, convert to positive
+            index = self.getNumItems() + index
+            if index < 0:   # If it's still negative, it's out of range
+                raise IndexError("Buffer index out of range.")
+                return None
         if index > self._depth - 1:
             raise IndexError("Buffer index out of range.")
             return None
         if index <= (self.getNumItems() - 1):
             index = (index + self._getPtr) % self._depth
             return index
-        else:
-            return None
+        return None
 
     def _convertSetIndex(self, index):
         if index > self._depth - 1:
@@ -125,7 +134,7 @@ class FIFO(object):
 
 if __name__ == "__main__":
     blockOnFull = input("Block FIFO on full buffer [T/F]: ?")
-    if blockOnFull.lower()[0] == 'f':
+    if blockOnFull == '' or blockOnFull.lower()[0] == 'f':
         blockOnFull = False
         print("Shift on full buffer.")
     else:
@@ -136,6 +145,8 @@ if __name__ == "__main__":
     while True:
         try:
             query = input("Add [a], get [g], or index[i]? ")
+            if query == '':
+                raise KeyboardInterrupt()
             if query.lower()[0] == 'a':
                 toAdd = input("String to add: ")
                 result = fifo.add(toAdd)
@@ -158,5 +169,7 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             print("Exiting...")
             break
+        except IndexError:
+            print("Index out of range!")
 
 

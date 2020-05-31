@@ -1,7 +1,7 @@
 # pypond
 ## An overly ambitious pet project to generate sheet music algorithmically
 
-**In baby development stage! - most everything is broken; don't try to use it unless you love to hurt**
+**In baby development stage! - A lot of stuff is still broken; don't try to use it unless you love to hurt**
 _Disclaimer: all this is subject to change at my very whim during baby development_
 
 ### How to install:
@@ -35,12 +35,9 @@ _LILYEXEC = "lilypond.exe"
 
 ### Known bugs/wackiness to work out:
 
-- Clearly doesn't know how to handle rests. Poor GNU Lilypond is left to figure out the mess.
-- Rhythms are still often written in a non-standard manner; that logic is surprisingly difficult.
-- In low-density music, rests are not combined and will look stupid.  This requires some type of lookback
-  logic (and that's a whole big thing).
-- The internal structure is a bit of a mess - need to have clear division of labor, reduce passing references
-  up and down the inheritance chain.
+- You may quibble with the way rhythms are notated.  I have no idea if this notation scheme is standard
+  but it makes sense to me.  Let's talk about it.
+- Poor pypond.Note class is just full of methods... I should clean up what I can at some point.
 
 ### Unimplemented - TODO (hopefully):
 
@@ -55,9 +52,13 @@ _LILYEXEC = "lilypond.exe"
 - Messy, but ultimately accurate notes in a given key/scale
 - Added key awareness, complete with choosing the correct enharmonic equivalent.
 - Added inclusion of key signature, clef, and time signature
-- May have fixed measure counting problem... yeah, I think so.
-- Complicated the note duration calculation process further, but the results are better in terms
-  of standard rhythm notation.  This ultimately needs to be reimplemented in a more elegant manner.
+- Added beatCount and measureCount to pypond.Note class to make the composer's code cleaner
+- Added a logger so debug info goes to a file instead of stdout
+- Added a "MeasureBuffer" based on a blocking FIFO, enabling processing of music in single-measure
+  increments.
+- Completely re-wrote the formatting algorithm by introducing an "Orchestrator" class which handles
+  all of the output formatting so the "Composer" class can just loftily dream up melodies without
+  worrying about how to write them down.
 
 Cheers,
 Keith
