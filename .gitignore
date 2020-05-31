@@ -2,6 +2,10 @@
 *.pyc
 **/*.pyc
 
+# Ignore vim swap files
+.*.swp
+*.swp
+
 # Ignore pdfs too
 *.pdf
 **/*.pdf
