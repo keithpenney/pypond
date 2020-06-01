@@ -41,7 +41,6 @@ _LILYEXEC = "lilypond.exe"
 
 ### Unimplemented - TODO (hopefully):
 
-- Implement the circle of fifths; changing keys by interval or by traversing the circle.
 - Polyphony!
 - Lots of new algorithms...
 
@@ -59,6 +58,8 @@ _LILYEXEC = "lilypond.exe"
 - Completely re-wrote the formatting algorithm by introducing an "Orchestrator" class which handles
   all of the output formatting so the "Composer" class can just loftily dream up melodies without
   worrying about how to write them down.
+- Added key changing by circle of fourths/fifths or by any interval.
+- Added support for diatonicity in MARandom
 
 Cheers,
 Keith

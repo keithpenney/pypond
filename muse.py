@@ -2,27 +2,7 @@
 
 """
 An algorithmic pseudo-random melody generator using pypond.py
-
-class Key(keystring)
-    keystring = "[T][Q]"
-    where T is a valid note name (Ab through G#)
-    and Q is a valid scale quality.
-
-    Valid scale qualities:
-        Major = enum('M', 'Maj', 'maj', 'MAJ')
-        Minor = enum('m', 'Min', 'min', 'MIN')
-        Diminished Whole-Half = enum('D', 'd', 'Dwh', 'DWH', 'dwh')
-        Diminished Half-Whole = enum('Dhw', 'DHW', 'dhw')
-        Chromatic = enum('*', 'C', 'c')
-        Whole Tone = enum('W', 'w')
 """
-
-# CHECK! TODO! Do we want to represent scale qualities as enum constants or classes rather than strings?
-# CHECK! TODO! Finish _ENCODING_NOTES
-# TODO! Finish class Key
-#   How do we say what notes are in a given key without simple brute-forcing?
-# CHECK! TODO! Learn regex and implement in parsing
-# TODO! Finish class MelodyAlgorithm
 
 import configparser
 import re
@@ -84,6 +64,15 @@ class MelodyAlgorithm(object):
         self.longestNote = config.get('longestNote')
         self.minDurationPwr2 = config._invLog2(self.shortestNote)
         self.maxDurationPwr2 = config._invLog2(self.longestNote)
+        self.diatonicity = config.get('diatonicity')
+        self.config = config
+
+    def reloadConfig(self):
+        self.setConfig(self.config)
+
+    def changeKey(self, newKey):
+        self.config.changeKey(newKey)
+        self.reloadConfig()
 
     def getNoteInKey(self, n):
         """Get a note within the key by a float from 0 to 1, which will be
@@ -98,6 +87,12 @@ class MelodyAlgorithm(object):
         note = self.key.getNoteByScaleDegree((rem + minScaleDegree) % notesInKey)
         note.setOctave(minOctave + octaves)
         return note
+
+    def changeParameters(self, changeDict):
+        """Change parameters based on those of the changeDict object."""
+        for key, value in changeDict.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
 
     def plantSeed(self, seed):
         """Seed any pseudo-random number generation."""
@@ -135,19 +130,27 @@ class MARandom(MelodyAlgorithm):
         super().__init__(None)
 
     def getNextNote(self):
-        #pitch = int(random.random()*(self.maxPitch - self.minPitch) + self.minPitch)
         isRest = False
+        # Decide if rest or note
         if random.random() > self.density:
             isRest = True
+        # Decide if we change key
+        r = 2*random.random() - 1 # A random number between -1 and +1
+        if abs(r) >= self.diatonicity:
+            # Change key
+            r = 2*random.random() - 1 # Another random number
+            nFourths = int(12*r)
+            newKey = self.key.getNewByFourths(nFourths)
+            #print("Changing keys: {} -> {}".format(self.key, newKey))
+            self.changeKey(newKey)
+        # Get the next duration
         rint = random.randint(1, 2**(self.minDurationPwr2 - self.maxDurationPwr2))
         duration = rint*(2**(self.maxDurationPwr2 - self.minDurationPwr2))
-        #print("pitch = {}, duration = {}, note = {}".format(pitch, duration, note.getNoteName()))
         if isRest:
             rest = pypond.Rest(duration)
             return rest
         else:
-            #pitch = random.randint(self.minPitch, self.maxPitch)
-            #note = pypond.Note.fromMIDIByte(pitch, duration = duration)
+            # Get a random pitch
             note = self.getNoteInKey(random.random())
             note.setDuration(duration)
             return note
@@ -476,8 +479,30 @@ class Key(object):
         return cls(keystring)
 
     def getNotesModal(self, scaleDegree):
-        intvals = _getIntervalsModal(self.getIntervals(), scaleDegree)
-        pass
+        #intvals = _getIntervalsModal(self.getIntervals(), scaleDegree)
+        notes = self.getNotes()
+        return _rotate(notes, scaleDegree)
+
+    def getNewByInterval(self, interval):
+        """Return a new Key object representing the key 'interval' half
+        steps away from the current Key.  'interval' is any valid signed
+        integer.
+        If 'interval' == 0, equivalent to self.copy()."""
+        return theory.TheoryClass.getKeyByInterval(self, interval)
+
+    def getNewByFourths(self, nFourths):
+        """Return a new Key object representing the key 'nFourths' degrees
+        away from the current Key on the circle of fourths.  'nFourths' is
+        any valid signed integer.
+        If 'nFourths' > 0, the key signature adds flats/removes sharps
+        (e.g. C -> F -> Bb -> Eb...).
+        If 'nFourths' < 0, the key signature add sharps/removes flats (e.g.
+        C -> G -> D -> A...).
+        If 'nFourths' == 0, equivalent to self.copy()."""
+        return theory.TheoryClass.getKeyByFourths(self, nFourths)
+
+    def getNewByFifths(self, nFifths):
+        return theory.TheoryClass.getKeyByFifths(self, nFifths)
 
 class _TimeSignature(object):
     def __init__(self, *args, **kwargs):
@@ -579,7 +604,8 @@ class Configuration(object):
         'numMeasures'       : (int, 8),
         'density'           : (_float, 1.0),
         'shortestNote'      : (_float, 1/64),
-        'longestNote'       : (_float, 1)
+        'longestNote'       : (_float, 1),
+        'diatonicity'       : (_float, 1)
     }
     def __init__(self, filename = None):
         self.filename = filename
@@ -628,13 +654,22 @@ class Configuration(object):
             _dbg("config({}) = {}".format(item[0], val))
             self._configStrings[item[0]] = val      # Add the string name to self._configStrings
         # = =  Add derived quantities = = 
+        self.addDerivedQuantities()
+        return (userCount, defaultCount)
+
+    def addDerivedQuantities(self):
         noteMin = self.config.get('noteLowest')
         noteMax = self.config.get('noteHighest')
         _dbg("noteMin = {}; noteMax = {}".format(noteMin, noteMax))
         keyNoteMin, keyNoteMax = self.getKeyNoteRange(noteMin, noteMax)
         self.config['keyNoteMin'] = keyNoteMin
         self.config['keyNoteMax'] = keyNoteMax
-        return (userCount, defaultCount)
+        return
+ 
+    def changeKey(self, newKey):
+        if isinstance(newKey, Key):
+            self.config['key'] = newKey
+            self.addDerivedQuantities()
 
     def useDefaults(self):
         """Force the use of default values for self.config by passing an empty user config"""

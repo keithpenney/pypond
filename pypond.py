@@ -762,24 +762,10 @@ class Note(object):
             f = False
         else:
             # Accidental
-            #print("accstr = {}".format(accstr))
             accint = LilySyntax._DecodeAccidentalString(accstr) # Get the integer encoding
-            #print("accint = {}".format(accint))
             acc = cls._DecodeAccidentalInt(accint)  # Decode as standard syntax (b/#)
-            #print("acc = {}".format(acc))
             f = True
         return (f, acc)
-
-    def getMIDIByte(self):
-        """Get the corresponding MIDI number representing the pitch"""
-        offset = self.noteMIDIOffsets.get(self.getNoteName()[0].lower(), None)
-        if offset == None:
-            _dbg("Note.getMIDIByte() offset not found.")
-            return None
-        #9 + 12*octave + offset
-        #_dbg("Note.getMIDIByte:\nself.getOctave() = {}, offset = {}, self.getAccidental() = {}".format(
-        #    self.getOctave(), offset, self.getAccidental()))
-        return 12*(self.getOctave() + 1) + offset + self.getAccidental()
 
     @classmethod
     def getPitchFromNoteString(cls, noteString):
@@ -794,6 +780,23 @@ class Note(object):
         octave = cls._OctaveFromString(noteString)
         accidental = cls._AccidentalFromString(noteString)
         return 12*(octave + 1) + offset + accidental
+
+    def toInteger(self):
+        """A synonym for 'getMIDIByte' which is more intuitive in most use cases."""
+        return self.getMIDIByte()
+
+    def getMIDIByte(self):
+        """Get the corresponding MIDI number representing the pitch"""
+        offset = self.noteMIDIOffsets.get(self.getNoteName()[0].lower(), None)
+        if offset == None:
+            _dbg("Note.getMIDIByte() offset not found.")
+            return None
+        return 12*(self.getOctave() + 1) + offset + self.getAccidental()
+
+    @classmethod
+    def fromInteger(cls, integer, duration = None, sharp = True):
+        """A synonym for 'fromMIDIByte' which is more intuitive in most use cases."""
+        return cls.fromMIDIByte(integer, duration, sharp)
 
     @classmethod
     def fromMIDIByte(cls, midibyte, duration = None, sharp = True):

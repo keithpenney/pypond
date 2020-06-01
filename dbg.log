@@ -2,7 +2,7 @@
 [muse.py]	config(noteLowest) = A3
 [muse.py]	config(noteHighest) = C6
 [muse.py]	config(key) = EbMaj
-[muse.py]	config(diatonicity) = 0
+[muse.py]	config(diatonicity) = 0.75
 [muse.py]	config(timeSignature) = 4/4
 [muse.py]	config(algorithm) = MARandom
 [muse.py]	config(numMeasures) = 32
@@ -15,4 +15,94 @@
 [muse.py]	noteMax = C6; in key? True
 [muse.py]	Configuration(cfg.ini) read 11 items; used defaults for 0 items
 [muse.py]	self.minPitch = 57; = 84
-[composer.py]	opening MARandom_200530_224912.ly
+[composer.py]	opening MARandom_200601_003654.ly
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = F#maj
+[muse.py]	noteMin = A3; in key? False
+[muse.py]	noteMax = C6; in key? False
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = D#maj
+[muse.py]	noteMin = A3; in key? False
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = Amaj
+[muse.py]	noteMin = A3; in key? True
+[muse.py]	noteMax = C6; in key? False
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = Fmaj
+[muse.py]	noteMin = A3; in key? True
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = Emaj
+[muse.py]	noteMin = A3; in key? True
+[muse.py]	noteMax = C6; in key? False
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = Fmaj
+[muse.py]	noteMin = A3; in key? True
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = C#maj
+[muse.py]	noteMin = A3; in key? False
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = Gmaj
+[muse.py]	noteMin = A3; in key? True
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = Bmaj
+[muse.py]	noteMin = A3; in key? False
+[muse.py]	noteMax = C6; in key? False
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = D#maj
+[muse.py]	noteMin = A3; in key? False
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = Cmaj
+[muse.py]	noteMin = A3; in key? True
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = D#maj
+[muse.py]	noteMin = A3; in key? False
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = D#maj
+[muse.py]	noteMin = A3; in key? False
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = A#maj
+[muse.py]	noteMin = A3; in key? True
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = Amaj
+[muse.py]	noteMin = A3; in key? True
+[muse.py]	noteMax = C6; in key? False
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = F#maj
+[muse.py]	noteMin = A3; in key? False
+[muse.py]	noteMax = C6; in key? False
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = Cmaj
+[muse.py]	noteMin = A3; in key? True
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	self.minPitch = 57; = 84
+[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	key = Cmaj
+[muse.py]	noteMin = A3; in key? True
+[muse.py]	noteMax = C6; in key? True
+[muse.py]	self.minPitch = 57; = 84

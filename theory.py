@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import pypond, muse
+from circular import Circular
 import re
 
 def _rotate(l, n):
@@ -11,8 +12,8 @@ def _rotate(l, n):
     return [l[(n + m) % length] for m in range(length)]
 
 class TheoryClass(object):
-    CircleOfFifths  = ('c', 'g', 'd', 'a', 'e', 'b', 'f#', 'db', 'ab', 'eb', 'bb', 'f')
-    OrderOfFlats    = ('b', 'e', 'a', 'd', 'g', 'c', 'f')
+    CircleOfFifths  = Circular(('c', 'g', 'd', 'a', 'e', 'b', 'f#', 'db', 'ab', 'eb', 'bb', 'f'))
+    OrderOfFlats    = Circular(('b', 'e', 'a', 'd', 'g', 'c', 'f'))
     SharpsMajor     = (1, 1, 1, 1, 1, 1, 0)
     SharpsMinor     = (1, 1, 1, 0, 0, 0, 0)
     fourthInterval  = 5 # 5 half-steps make a perfect fourth
@@ -33,7 +34,7 @@ class TheoryClass(object):
     }
 
     @classmethod
-    def getKeyAtInterval(cls, key, interval):
+    def getKeyByInterval(cls, key, interval):
         """Returns a Key object of the same key quality as 'key', with tonic rooted
         up a perfect-fifth from that of 'key'"""
         interval = pypond._int(interval)
@@ -42,21 +43,52 @@ class TheoryClass(object):
         note = pypond.Note(key.getTonicName())
         nextNote = note.getNoteByInterval(interval)
         quality = key.getQuality()
-        nextKey = Key(nextNote.getNoteName())
+        nextKey = muse.Key(nextNote.getNoteName())
         nextKey.setQuality(quality)
         return nextKey
 
     @classmethod
-    def getNextFifth(cls, key):
-        """Returns a Key object of the same key quality as 'key', with tonic rooted
-        up a perfect-fifth from that of 'key'"""
-        return cls.getKeyAtInterval(cls.fifthInterval)
+    def _fifthsToInterval(cls, nFifths):
+        return (nFifths*cls.fifthInterval) % 12
 
     @classmethod
-    def getNextFourth(cls, key):
+    def _fourthsToInterval(cls, nFourths):
+        return (nFourths*cls.fourthInterval) % 12
+
+    @classmethod
+    def _intervalToFourths(cls, interval):
+        return (interval*cls.fourthInterval) % 12
+
+    @classmethod
+    def _intervalToFifths(cls, interval):
+        return (interval*cls.fifthsInterval) % 12
+
+    @classmethod
+    def getKeyByFourths(cls, key, nFourths):
+        """Get the key (of the same key quality as 'key') which is
+        nFourths degrees away on the circle of Fourths.
+        E.g. : key = C;  nFourths = 2;  return Bb
+        E.g. : key = A;  nFourths = 4;  return F
+        E.g. : key = Eb; nFourths = -1; return Bb
+        """
+        interval = cls._fourthsToInterval(nFourths)
+        return cls.getKeyByInterval(key, interval)
+
+    @classmethod
+    def getKeyByFifths(cls, key, nFifths):
+        return cls.getKeyByFourths(key, -nFifths)
+
+    @classmethod
+    def getKeyNextFifth(cls, key):
+        """Returns a Key object of the same key quality as 'key', with tonic rooted
+        up a perfect-fifth from that of 'key'"""
+        return cls.getKeyByInterval(cls.fifthInterval)
+
+    @classmethod
+    def getKeyNextFourth(cls, key):
         """Returns a Key object of the same key quality as 'key', with tonic rooted
         up a perfect-fourth from that of 'key'"""
-        return cls.getKeyAtInterval(cls.fourthInterval)
+        return cls.getKeyByInterval(cls.fourthInterval)
 
     @classmethod
     def isSharpKey(cls, key):

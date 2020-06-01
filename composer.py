@@ -1,13 +1,6 @@
 #!/usr/bin/python3
 
 """A python script to generate GNU lilypad sheet music from muse.py and pypond.py"""
-# Lilypond path: C:\Program Files (x86)\LilyPond\usr\bin
-
-# TODO! Keep track of the beats in the measure and break up a single note into two notes
-# tied together across a barline when necessary.
-# TODO! Compose a given number of measures, not notes.
-
-# TODO Dotted notes need to know when to break across measures
 
 import os, subprocess
 import muse, pypond, theory, fifo, diagnostics
