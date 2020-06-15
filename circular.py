@@ -23,6 +23,9 @@ class Circular():
             key = self._internalIndex(key)
         self.array[key] = value
 
+    def __iter__(self):
+        yield from self.array
+
     def _internalIndex(self, index):
         """Get the internal index (ranging from 0 to len(self) - 1) corresponding to
         outward-facing index 'index' (which can range from -inf to +inf)."""
@@ -36,6 +39,9 @@ class Circular():
 
     def __repr__(self):
         return repr(self.array)
+
+    def getArray(self):
+        return self.array
 
     def index(self, val):
         """Return the index of the first value matching 'val' if found.
@@ -136,9 +142,15 @@ def _testCircular(argv):
             print("Exiting...")
             break
 
+def _testIter(argv):
+    circ = Circular(('a', 'b', 'c', 'd', 'e'))
+    for x in circ:
+        print(x)
+
 if __name__ == '__main__':
     import sys
     argv = sys.argv
     #_testInternalIndex(argv)
+    #_testIter(argv)
     _testCircular(argv)
 

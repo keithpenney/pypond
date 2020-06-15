@@ -8,6 +8,9 @@ import configparser
 import re
 import pypond, theory
 import random
+import circular
+
+import math
 
 DEBUG = True
 LOGFILE = None
@@ -60,6 +63,9 @@ class MelodyAlgorithm(object):
         self.keyNoteMin = config.get('keyNoteMin')
         self.keyNoteMax = config.get('keyNoteMax')
         self.numRange = self.key.getNumNotesInRange(self.keyNoteMin, self.keyNoteMax)
+        print("keyNoteMin = {}; keyNoteMax = {}; self.numRange = {}".format(
+            self.keyNoteMin, self.keyNoteMax, self.numRange))
+        self.notesInRange = self.key.getNumNotesInRange(self.keyNoteMin, self.keyNoteMax)
         self.shortestNote = config.get('shortestNote')
         self.longestNote = config.get('longestNote')
         self.minDurationPwr2 = config._invLog2(self.shortestNote)
@@ -77,6 +83,9 @@ class MelodyAlgorithm(object):
     def getNoteInKey(self, n):
         """Get a note within the key by a float from 0 to 1, which will be
         quantized to key notes within self.keyNoteMin and self.keyNoteMax"""
+        index = int(n*self.notesInRange)
+        return self.key.getNoteInRange(self.keyNoteMin, self.keyNoteMax, index)
+        """
         nint = int(n*self.numRange)
         minScaleDegree = self.key.getScaleDegree(self.keyNoteMin)
         #maxScaleDegree = self.key.getScaleDegree(self.keyNoteMax)
@@ -87,6 +96,7 @@ class MelodyAlgorithm(object):
         note = self.key.getNoteByScaleDegree((rem + minScaleDegree) % notesInKey)
         note.setOctave(minOctave + octaves)
         return note
+        """
 
     def changeParameters(self, changeDict):
         """Change parameters based on those of the changeDict object."""
@@ -247,12 +257,12 @@ class _KeyQuality(object):
 
 
 class Key(object):
-    _intervalsMajor = (0, 2, 4, 5, 7, 9, 11) # wwhwwwh
-    _intervalsMinor = _getIntervalsModal(_intervalsMajor, 6)    # Aeolian
-    _intervalsDWH   = (0, 2, 3, 5, 6, 8, 9, 11)
-    _intervalsDHW   = (0, 1, 3, 4, 6, 7, 9, 10)
-    _intervalsChromatic = range(12)
-    _intervalsWholeTone = (0, 2, 4, 6, 8, 10)
+    _intervalsMajor = circular.Circular((0, 2, 4, 5, 7, 9, 11)) # wwhwwwh
+    _intervalsMinor = circular.Circular((0, 2, 3, 5, 6, 8, 10)) # Aeolian
+    _intervalsDWH   = circular.Circular((0, 2, 3, 5, 6, 8, 9, 11))
+    _intervalsDHW   = circular.Circular((0, 1, 3, 4, 6, 7, 9, 10))
+    _intervalsChromatic = circular.Circular([x for x in range(12)])
+    _intervalsWholeTone = circular.Circular((0, 2, 4, 6, 8, 10))
     _intervals = {
         _KeyQuality.major : _intervalsMajor,
         _KeyQuality.minor : _intervalsMinor,
@@ -401,16 +411,81 @@ class Key(object):
                 originalNote = notes[n]             # need to keep a reference to the unaltered note
                 notes[n] = originalNote.alter(alt[0])   # Alter the first note
                 for m in range(len(alt[1:])):
-                    notes.insert(n+m+1, originalNote.alter(alt[m+1])) # Jam any remaining alterations in there
+                    notes.insert(n+m+1, originalNote.alter(alt[m+1])) # Jam any remaining alterations in
         return notes
 
-    def getNumNotesInRange(self, noteMin, noteMax):
+    def getNumNotesInRange(self, note0, note1):
         """Get the number of notes in the key within the range noteMin to noteMax (inclusive)."""
+        # First determine which note is higher than the other
+        enc0 = note0.toInteger()
+        enc1 = note1.toInteger()
+        if enc1 > enc0:
+            noteMin = note0
+            noteMax = note1
+        else:
+            noteMin = note1
+            noteMax = note0
+        # Then verify that the notes are both within the key
+        inkey, higher, lower = self.isInKey(noteMin)
+        if not inkey:
+            #print("{} not in key, using {} instead".format(noteMin, higher))
+            noteMin = higher
+        inkey, higher, lower = self.isInKey(noteMax)
+        if not inkey:
+            #print("{} not in key, using {} instead".format(noteMax, lower))
+            noteMax = lower
         minoctave = noteMin.getOctave()
         maxoctave = noteMax.getOctave()
         scaleDegreeMin = self.getScaleDegree(noteMin)
-        scaleDegreeMax = self.getScaleDegree(noteMin)
-        return 7 * (maxoctave - minoctave) + (7 - scaleDegreeMin) + (scaleDegreeMax)
+        scaleDegreeMax = self.getScaleDegree(noteMax)
+        #print('scaleDegreeMin = {}; scaleDegreeMax = {}'.format(scaleDegreeMin, scaleDegreeMax))
+        #docts = maxoctave - minoctave
+        #print('docts = {}'.format(docts))
+        # Remember that octaves breaks are between B and C (B4->C5)
+        # If octindexmax < octindexmin, subtract one octave difference
+        octIndexMax = noteMax.getOctaveIndex()
+        octIndexMin = noteMin.getOctaveIndex()
+        #print('octIndexMin = {}; octIndexMax = {}'.format(octIndexMin, octIndexMax))
+        #if octIndexMax < octIndexMin:
+        #    docts -= 1
+        #print('docts = {}'.format(docts))
+        octIndexTonic = self.getTonic().getOctaveIndex()
+        # Adjust the octave numbers to account for octave break vs. octave index break
+        if octIndexMax < octIndexTonic:
+            maxoctave -= 1
+        if octIndexMin < octIndexTonic:
+            minoctave -= 1
+        maxnum = 7*maxoctave + scaleDegreeMax
+        minnum = 7*minoctave + scaleDegreeMin
+        return maxnum - minnum + 1
+        #return 7 * docts - scaleDegreeMin + scaleDegreeMax + 1
+
+    def getNoteInRange(self, noteMin, noteMax, index):
+        """Get a note within the key between 'noteMin' and 'noteMax' by index
+        'index' which can range from 0 to self.getNumNotesInRange(noteMin, noteMax)."""
+        if index <= 0:
+            return noteMin
+        nmax = self.getNumNotesInRange(noteMin, noteMax)
+        if index > nmax - 1:
+            return noteMax
+        iv = self.getIntervals()
+        minsd = self.getScaleDegree(noteMin)
+        stepsTotal = 0
+        prior = iv[minsd]           # The half-steps from tonic of noteMin
+        delta = 0
+        for n in range(index + 1):
+            this = iv[minsd + n]        # The half-steps from tonic of the next note
+            if this >= prior:
+                delta = this - prior  # Add the difference in half-steps
+            else:
+                delta = (12 + this) - prior
+            #print("Step {}. Adding {}".format(n, delta))
+            stepsTotal += delta
+            prior = this
+        #print("stepsTotal = {}".format(stepsTotal))
+        issharp = self.isSharpKey()
+        newnote = noteMin.getNoteByInterval(stepsTotal, sharp = issharp)
+        return newnote
 
     def getScaleDegree(self, note):
         """Get the scale degree of note 'note' or None if 'note' not in key
@@ -467,6 +542,66 @@ class Key(object):
         if nextLower.getMIDIByte() > note.getMIDIByte():
             nextLower.setOctave(octave - 1)
         return (match, nextHigher, nextLower)
+
+    def getEnharmonicInKey(self, note):
+        """Get the enharmonic equivalent of 'note' within key 'self'"""
+        inkey, high, low = self.isInKey(note)
+        dur = note.getDuration()
+        octave = note.getOctave()
+        beatnum = note.getBeatNum()
+        newnote = None
+        if inkey:
+            for keynote in self.getNotes():
+                if keynote.isEqualNote(note):
+                    newnote = keynote
+                    break
+        else:
+            sharp = self.isSharpKey()
+            newnote = note.simplify(sharp = sharp)
+        if newnote == None:
+            return note
+        newnote.setOctave(octave)
+        newnote.copyRhythmParams(note)
+        return newnote
+ 
+    def getBestEnharmonic(self, note):
+        """Choose the best enharmonic representation of 'note' given the key (self)
+        and return it."""
+        # Produce a list of enharmonic notes +/- two half-steps in either direction,
+        # e.g. if note == C#, enharmonic list would be:
+        # [B##, C#, Db, Ebbb]
+        if note.isRest():
+            return note
+        enlist = []
+        inkey, high, low =  self.isInKey(note)
+        if inkey:
+            newnote = self.getEnharmonicInKey(note)
+            #print("Returning (1): {}".format(newnote))
+            return newnote
+        for n in (-2, -1, 0, 1, 2):
+            newnote = note.getEnharmonicEquivalent(n)
+            enlist.append(newnote)
+        #print("enlist = {}".format(enlist))
+        accs = []
+        for note in enlist:
+            accs.append(note.getAccidental())
+        accsabs = [abs(x) for x in accs]
+        minacc = min(accsabs)
+        count = accsabs.count(minacc)
+        if count == 1:
+            index = accsabs.index(minacc)
+        elif count == 2:
+            # We probably have one sharp and one flat (e.g. C# and Db), choose
+            # based on the key.
+            if self.isSharpKey():
+                index = accs.index(minacc)
+            else:
+                index = accs.index(-minacc)
+        #print("Returning (2): {}".format(enlist[index]))
+        return enlist[index]
+        # If any note is in the key, return it.
+        # If the original note has >1 sharp or >1 flat, return the enharmonic with
+        # fewer (e.g. C## -> D, Cbb -> Bb (not A#), Abbb -> Gb)
 
     def getIntervals(self):
         return self.intervals
@@ -590,11 +725,15 @@ def _AlgorithmParser(algorithm):
             #    print("... is not subclass")
     return None                                     # if no match is found, return None
 
+def _clefParser(*args, **kwargs):
+    """Wrapper function. Namespace hell."""
+    theory.TheoryClass._clefParser(*args, **kwargs)
+
 class Configuration(object):
     _FilenameForceDefaults = '*'
     _ConfigCalls = {
         #Name               : (callable, defaultValue)
-        'clef'              : (theory.TheoryClass._clefParser, "treble"),
+        'clef'              : (_clefParser, "treble"),
         'noteLowest'        : (pypond.Note, "A2"),
         'noteHighest'       : (pypond.Note, "C6"),
         'key'               : (Key, "CM"),
@@ -661,9 +800,11 @@ class Configuration(object):
         noteMin = self.config.get('noteLowest')
         noteMax = self.config.get('noteHighest')
         _dbg("noteMin = {}; noteMax = {}".format(noteMin, noteMax))
+        #print("noteMin = {}; noteMax = {}".format(noteMin, noteMax))
         keyNoteMin, keyNoteMax = self.getKeyNoteRange(noteMin, noteMax)
         self.config['keyNoteMin'] = keyNoteMin
         self.config['keyNoteMax'] = keyNoteMax
+        #print("keyNoteMin = {}; keyNoteMax = {}".format(keyNoteMin, keyNoteMax))
         return
  
     def changeKey(self, newKey):
@@ -719,6 +860,57 @@ class Configuration(object):
             inv /= 2
             y += 1
         return y
+
+class Randomer():
+    x0 = math.sqrt(2*math.log(2))
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def coinToss(heads = None, tails = None):
+        """A custom-weighted random binary choice.  Returns True on 'heads'
+        and False on 'tails'.  If 'heads' is given, 'tails' is ignored.
+        'heads' + 'tails' = 1.0
+        """
+        if heads != None:
+            heads = _float(heads)
+            tails = 1.0 - heads
+        elif tails != None:
+            tails = _float(tails)
+            heads = 1.0 - heads
+        else:
+            heads = 0.5
+            tails = 0.5
+        n = random.random()
+        if n < heads:
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def randArray(array):
+        """Select a random element of 'array' and return it. Like picking a
+        card from a deck."""
+        n = random.randint(0, len(array) - 1)
+        return array[n]
+
+    @classmethod
+    def boundedGauss(cls, begin, end, center = None, order = 0):
+        """This function is kinda weak right now.  'order' must be an integer
+        and the probability rapidly peaks. Try something else.
+        order = odd polynomial order
+        If order == 0, linear function, equal probability.
+        As order -> +inf, probability becomes peaked around the center."""
+        x = 2*random.random() - 1     # Rand number between -1 and 1
+        order = int((order + 1)*2 - 1)
+        y = x**order                    # A weighted random number between -1 and 1
+        yp = 5.5 + 4.5*y                # A weighted random number between 1 and 10
+        ly = math.log10(yp)             # Now take the log; result between 0 and 1
+        rng = abs(end - begin)
+        #r = rng*ly
+        r = rng*(y + 1)/2
+        #print("x = {:.4}\torder = {}\ty = {:.4}\tr = {:.4}".format(x, order, y, r))
+        return r
 
 def _eval(s):
     """A safer version of eval, primarily for evaluating simple arithmetic expressions in
@@ -794,18 +986,94 @@ def _testIsInKey(args):
     print("highByte = {}; noteByte = {}; lowByte = {}".format(high.getMIDIByte(), note.getMIDIByte(),
           low.getMIDIByte()))
 
-def _testGetNumNotesInRange(args):
+def _testGetNumNotesInRange(argv):
     USAGE = "python3 {} <keyString> [noteLow] [noteHigh]".format(args[0])
     if len(argv) > 3:
-        keyString = args[1]
+        keyString = argv[1]
         key = Key(keyString)
-        note1 = pypond.Note(args[2])
-        note2 = pypond.Note(args[3])
+        note1 = pypond.Note(argv[2])
+        note2 = pypond.Note(argv[3])
     else:
         print(USAGE)
         return
     numNotes = key.getNumNotesInRange(note1, note2)
     print("notes in range ({}, {}) = {}".format(note1, note2, numNotes))
+
+def _plotHistogram(array, nmin, nmax, bins = 10):
+    rng = abs(nmax - nmin)
+    mod = rng/bins
+    #print("rng = {}; bins = {}; mod = {}".format(rng, bins, mod))
+    binarray = [0]*bins
+    for num in array:
+        index = int((num - nmin)/mod)
+        #print("num = {:.4}\tindex = {}".format(num, index))
+        binarray[index] += 1
+    fullchars = 60              # How many chars should represent a 'full' bar
+    maxbin = max(binarray)
+    total = 0
+    for n in range(len(binarray)):
+        pop = binarray[n]
+        #print("bin {} has {}".format(n, pop))
+        total += pop
+    #print("Total ticks = {}".format(total))
+    normarray = [int((fullchars*x)/maxbin) for x in binarray]
+    for n in range(len(normarray)):
+        row = normarray[n]
+        print('{:2} |'.format(n) + '#'*row)
+
+def _testRandomer(args):
+    # Take 100 samples and make a histogram
+    USAGE = "python3 {} [order]".format(args[0])
+    l = 100000
+    if len(args) > 1:
+        order = abs(int(args[1]))
+    else:
+        order = 1
+    function = lambda : Randomer.boundedGauss(0, 100, order = order)
+    results = [0]*l
+    for n in range(l):
+        results[n] = function()
+    _plotHistogram(results, 0, 100, bins = 40)
+
+def _testKeyGetBestEnharmonic(argv):
+    USAGE = "python3 {} keystring notestring".format(argv[0])
+    if len(argv) > 2:
+        keystring = argv[1]
+        notestring = argv[2]
+        key = Key(keystring)
+        note = pypond.Note(notestring)
+        newnote = key.getBestEnharmonic(note)
+        print("key = {}; note = {}; enharmonic = {}".format(key, note, newnote))
+    else:
+        print(USAGE)
+        return
+
+def _testKeyGetEnharmonicInKey(argv):
+    USAGE = "python3 {} keystring notestring".format(argv[0])
+    if len(argv) > 2:
+        keystring = argv[1]
+        notestring = argv[2]
+        key = Key(keystring)
+        note = pypond.Note(notestring)
+        newnote = key.getEnharmonicInKey(note)
+        print("key = {}; note = {}; enharmonic = {}".format(key, note, newnote))
+    else:
+        print(USAGE)
+        return
+
+def _testKeyGetNoteInRange(argv):
+    USAGE = "python3 {} <keyString> noteLow noteHigh index".format(argv[0])
+    if len(argv) > 4:
+        keyString = argv[1]
+        key = Key(keyString)
+        note1 = pypond.Note(argv[2])
+        note2 = pypond.Note(argv[3])
+        index = int(argv[4])
+    else:
+        print(USAGE)
+        return
+    indexNote = key.getNoteInRange(note1, note2, index)
+    print("({}, {})[{}] = {}".format(note1, note2, index, indexNote))
 
 if __name__ == "__main__":
     import sys
@@ -814,6 +1082,9 @@ if __name__ == "__main__":
     #_testTimeSignature(argv)
     #_testConfiguration(argv)
     #_testKey(argv)
-    _testIsInKey(argv)
+    #_testIsInKey(argv)
     #_testGetNumNotesInRange(argv)
-
+    #_testRandomer(argv)
+    #_testKeyGetBestEnharmonic(argv)
+    #_testKeyGetEnharmonicInKey(argv)
+    _testKeyGetNoteInRange(argv)

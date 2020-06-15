@@ -11,6 +11,7 @@
 #   C-1 = 0
 
 import sys
+import circular
 import re
 
 DEBUG = True
@@ -117,7 +118,10 @@ class LilySyntax():
             return 0
 
 class Note(object):
-    noteMIDIOffsets = {'c' : 0, 'd' : 2, 'e' : 4, 'f' : 5, 'g' : 7, 'a' : 9, 'b' : 11}
+    octaveIndices = {'c'  : 0, 'c#' : 1, 'db' :  1, 'd'  :  2, 'd#' : 3, 'eb' : 3,
+                     'e'  : 4, 'f'  : 5, 'f#' :  6, 'gb' :  6, 'g'  : 7, 'g#' : 8,
+                     'ab' : 8, 'a'  : 9, 'a#' : 10, 'bb' : 10, 'b'  : 11}
+    noteOrder = circular.Circular(['c','d','e','f','g','a','b'])
     flatChar = 'b'
     sharpChar = '#'
     naturalChar = ""
@@ -164,6 +168,14 @@ class Note(object):
         else:
             return ""
 
+    def setAccidental(self, accidental):
+        """Set the accidental for this note.  'accidental' should
+        be a signed integer with -1 representing flat, +1 representing
+        sharp, etc."""
+        acc = _int(accidental)
+        if acc != None:
+            self.accidental = acc
+
     def getAccidental(self):
         """Returns -1 for flat, +1 for sharp, or 0 for natural."""
         return self.accidental
@@ -195,6 +207,16 @@ class Note(object):
         oct = _int(octave)
         if oct != None:
             self.octave = oct
+
+    def getOctaveIndex(self):
+        """Get the index of the note within the octave.  Octaves begin at 'C' and
+        thus C has octave index of 0. Increasing by a half-step increases the index
+        by 1 until B which has index of 11."""
+        notename = self.getNoteName().lower()           # Most of the time this name should work
+        if notename not in self.octaveIndices.keys():   # If not, it probably has too many accidentals
+            simple = self.simplify()                    # Simplify
+            notename = simple.getNoteName().lower()     # And try again
+        return self.octaveIndices.get(notename)         # Return the index
 
     def getNote(self):
         """Returns (noteName, accidental, octave)"""
@@ -458,6 +480,8 @@ class Note(object):
     def setDuration(self, duration):
         """Set the note duration in normal units, i.e. 0.125 = 1/8 for an eighth note.
         Tuplets are undetermined as of yet."""
+        if duration == None:
+            return False
         dur = _float(duration)
         if dur == None:
             raise Error_Float("Cannot interpret duration {}".format(duration))
@@ -510,11 +534,11 @@ class Note(object):
             return False
 
     def getEncoding(self):
-        """Get note name encoding according to global _ENCODING_NOTES dict"""
+        """Get note name encoding according to class octaveIndex dict"""
         noteSimple = self.simplify()
-        return _ENCODING_NOTES.get(noteSimple.getNoteName(), None)
+        return self.octaveIndices.get(noteSimple.getNoteName().lower(), None)
 
-    def simplify(self, notestring = None):
+    def simplify(self, notestring = None, sharp = True):
         """Return a simplified enharmonic equivalent note.
         I.e. if note = Dbb, note.simplify = C"""
         if notestring != None:
@@ -522,7 +546,10 @@ class Note(object):
         else:
             note = self
         b = note.getMIDIByte()
-        return self.fromMIDIByte(b)
+        newnote = self.fromMIDIByte(b, sharp = sharp)
+        newnote.setDuration(note.getDuration())
+        newnote.setBeatNum(note.getBeatNum())
+        return newnote
 
     def getInterval(self, note):
         """Return the smallest interval between self and note, ignoring octaves.
@@ -773,7 +800,7 @@ class Note(object):
         Parse 'noteString' and return the integer pitch (based on MIDI standard) corresponding
         to this note."""
         noteName = cls._NoteNameFromString(noteString)
-        offset = cls.noteMIDIOffsets.get(noteName.lower(), None)
+        offset = cls.octaveIndices.get(noteName.lower(), None)
         if offset == None:
             _dbg("Note.getPitchFromNoteString() offset not found.")
             return None
@@ -787,7 +814,7 @@ class Note(object):
 
     def getMIDIByte(self):
         """Get the corresponding MIDI number representing the pitch"""
-        offset = self.noteMIDIOffsets.get(self.getNoteName()[0].lower(), None)
+        offset = self.octaveIndices.get(self.getNoteName()[0].lower(), None)
         if offset == None:
             _dbg("Note.getMIDIByte() offset not found.")
             return None
@@ -813,8 +840,8 @@ class Note(object):
         nextLowest = None
         accidental = None
         accstring = None
-        for note in cls.noteMIDIOffsets.keys():
-            noffset = cls.noteMIDIOffsets[note]
+        for note in cls.noteOrder:
+            noffset = cls.octaveIndices[note]
             if offset == noffset:
                 noteMatch = note
             elif offset == noffset + 1:
@@ -838,12 +865,69 @@ class Note(object):
         notestring = "{}{}{}".format(noteName.upper(), accstring, str(octave))
         return Note(notestring, duration)
 
+    def getEnharmonicEquivalent(self, steps):
+        """Get an enharmonic equivalent note with base shifted by 'steps' steps.
+        Does not support multiple-octave offsets (e.g. abs(steps) > 7), so don't
+        be an asshole.
+        E.g.:
+            note    steps   result
+            ----    -----   ------
+            C       -2      A###
+            C       +2      Ebbbb
+            Eb      +1      Fbb
+            Eb      -3      B####"""
+        noteBase, accidental, octave = self.getNote()
+        noteBase = noteBase.lower()
+        #print("org: {} {} {}".format(noteBase, accidental, octave))
+        baseIndex = self.noteOrder.index(noteBase)
+        baseOffset = self.octaveIndices.get(noteBase)
+        newBase = self.noteOrder[baseIndex + steps]
+        newOffset = self.octaveIndices.get(newBase)
+        #print("baseOffset = {}; newOffset = {}".format(baseOffset, newOffset))
+        #dSteps = min((newOffset - baseOffset)%12, (baseOffset - newOffset)%12)
+        doct = 0
+        if steps >= 0:
+            #dSteps = (baseOffset - newOffset)
+            if newOffset < baseOffset:
+                doct = 1
+        else:
+            #dSteps = (newOffset - baseOffset)
+            if newOffset > baseOffset:
+                doct = -1
+        dSteps = -(newOffset + 12*doct - baseOffset)
+        #print("dSteps = {}".format(dSteps))
+        newAccidental = accidental + dSteps
+        # How figure out octave?
+        newOctave = octave + doct
+        #print("new: {} {} {}".format(newBase, newAccidental, newOctave))
+        newnote = self.new(newBase)
+        newnote.setAccidental(newAccidental)
+        newnote.setOctave(newOctave)
+        newnote.copyRhythmParams(self)
+        return newnote
+
     def getNoteString(self):
         self.noteString = self.getNoteLetter() + self.getAccidentalString() + str(self.getOctave())
         return self.noteString
 
     def copy(self):
-        return self.new(self.noteString, self.duration)
+        newnote = self.new(self.noteString, self.duration)
+        newnote.setOctave(self.getOctave())
+        return newnote
+
+    def copyRhythmParams(self, note):
+        """Set this note's rhythmic parameters to those of 'note'.
+        These include:
+            duration
+            beatNum
+            tie
+            dot
+        """
+        self.setDuration(note.getDurationNoDot())
+        self.setBeatNum(note.getBeatNum())
+        self.setTie(note.getTie())
+        self.setDot(note.getDot())
+        return
 
     def alter(self, interval):
         """Similar to getNoteByInterval() except simply alters the note further.
@@ -1007,6 +1091,10 @@ class Rest(Note):
         temp.setBeatNum(self.getBeatNum())
         return temp
 
+    def getOctaveIndex(self):
+        """No octave index associated with a Rest"""
+        return 0
+
 def _dbg(*args, **kwargs):
     if DEBUG:
         if LOGFILE != None:
@@ -1091,14 +1179,28 @@ def _int(s):
 
 def _float(s):
     if s == None:
-        return None
+        return s
     if isinstance(s, float):
         return s
     try:
         r = float(s)
-    except (ValueError, TypeError):
-        return None
+        return r
+    except ValueError:
+        pass
+    if '/' in s:
+        r = _eval(s)
+        return r
     return r
+
+def _eval(s):
+    """A safer version of eval, primarily for evaluating simple arithmetic expressions in
+    string form."""
+    l = []
+    safechars = ('/', '+', '-', '*', '.', ')', '(')
+    for c in s:
+        if c.isdigit() or c in safechars:
+            l.append(c)
+    return eval(''.join(l))
 
 class Error_MIDI_Byte(Exception):
     pass
@@ -1223,6 +1325,20 @@ def _testNoteFromLily(args):
     else:
         print(USAGE)
 
+def _testNoteGetEnharmonicEquivalent(argv):
+    USAGE = "python3 {} notestring steps"
+    if len(argv) > 2:
+        notestring = argv[1]
+        steps = _int(argv[2])
+        note = Note(notestring)
+        print(note)
+        newnote = note.getEnharmonicEquivalent(steps)
+    else:
+        print(USAGE)
+        return
+    print(newnote)
+    return
+
 if __name__ == "__main__":
     import sys
     argv = sys.argv
@@ -1234,4 +1350,5 @@ if __name__ == "__main__":
     #_testRest(argv)
     #_testNoteSharpFlat(argv)
     #_testNoteGetInterval(argv)
-    _testNoteFromLily(argv)
+    #_testNoteFromLily(argv)
+    _testNoteGetEnharmonicEquivalent(argv)

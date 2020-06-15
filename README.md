@@ -35,6 +35,8 @@ _LILYEXEC = "lilypond.exe"
 
 ### Known bugs/wackiness to work out:
 
+- TODO: Something is wrong with measure/beat counting again.  Occasionally produces fewer measures than
+  requested.  I'm looking into this.
 - You may quibble with the way rhythms are notated.  I have no idea if this notation scheme is standard
   but it makes sense to me.  Let's talk about it.
 - Poor pypond.Note class is just full of methods... I should clean up what I can at some point.
@@ -60,6 +62,8 @@ _LILYEXEC = "lilypond.exe"
   worrying about how to write them down.
 - Added key changing by circle of fourths/fifths or by any interval.
 - Added support for diatonicity in MARandom
+- Fixed note range within key calculations (I think)
+- Added a step for the orchestrator to select the best enharmonic equivalent for each note
 
 Cheers,
 Keith

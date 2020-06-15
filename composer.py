@@ -40,6 +40,7 @@ class Composer():
         self.measureCount = 0
         self.beatCount = 0
         self.measureDuration = self.config.getMeasureDuration()
+        self.homeKey = self.config.get('key', None)         # The key signature of the sheet music
         #print("self.measureDuration = {}".format(self.measureDuration))
         self.precision = self.config.get('shortestNote', 1/64)
         self.initBuffer(self.measureDuration, self.precision)
@@ -126,7 +127,8 @@ class Composer():
     def processMeasure(self, measure, tieLastNote = False):
         """Send a measure to the Orchestrator.  Get a formatted measure back, and
         return it."""
-        return Orchestrator.processMeasure(measure, tieLastNote)
+        print("measure #{}".format(self.measureCount))
+        return Orchestrator.processMeasure(measure, tieLastNote, homeKey = self.homeKey)
 
     @staticmethod
     def _invert(length):
@@ -213,7 +215,8 @@ class Composer():
                 self.writeString(indent + formattedMeasure, fd)
                 if lineMeasureCount == measuresPerLine - 1:
                     lineMeasureCount = 0
-                    self.writeString("\n", fd)
+                    #self.writeString("\n", fd)
+                    self.writeString("    % Measure {}\n".format(self.measureCount), fd)
                 else:
                     lineMeasureCount += 1
         self.writeString("\n", fd)
@@ -279,14 +282,24 @@ class Orchestrator():
         pass
 
     @classmethod
-    def processMeasure(cls, measure, tieLastNote = False):
+    def processMeasure(cls, measure, tieLastNote = False, homeKey = None):
         """Multi-pass algorithm:
         1. Combine adjacent rests.
-        2. Replace notes with lists of tied notes from self.decomposeNotes
-        3. Flatten note list and join into Lilypond-formatted string.
-        4. Return string to caller.
+        2. Replace notes with more appropriate enharmonic equivalents when necessary
+        3. Replace notes with lists of tied notes from self.decomposeNotes
+        4. Flatten note list and join into Lilypond-formatted string.
+        5. Return string to caller.
+
+        'homeKey' is the key that is in use at the top of the piece (see cfg).
         """
+        if not isinstance(homeKey, muse.Key):
+            try:
+                homeKey = muse.Key(homeKey)
+            except Exception as e:
+                print(e)
+                homeKey = None
         measure = cls.combineRests(measure)
+        #measure = cls.optimizeEnharmonics(measure, homeKey)
         measure = cls.expand(measure)
         return cls.stringify(measure, tieLast = tieLastNote)
 
@@ -311,6 +324,17 @@ class Orchestrator():
         return measure
 
     @classmethod
+    def optimizeEnharmonics(cls, measure, key = None):
+        """For each note in the measure, determine the best enharmonic equivalent
+        for this particular case."""
+        if key == None:
+            # Could also try to filter out double-sharps and double-flats
+            return measure
+        for n in range(len(measure)):
+            measure[n] = key.getBestEnharmonic(measure[n])
+        return measure
+
+    @classmethod
     def expand(cls, measure):
         """Replace each note with a list of tied basis notes if needed, returning
         the expanded (nested-list) measure."""
@@ -323,10 +347,10 @@ class Orchestrator():
         """Assume measure is nested-list.  Flatten it first, then convert each note
         in the measure to a string in GNU Lilypond format, concatenate the strings
         in order, and return the resulting string."""
+        measure = cls._flattenList(measure, depth = 1)
         if tieLast:
             if hasattr(measure[-1], 'setTie'):
                 measure[-1].setTie(True)
-        measure = cls._flattenList(measure, depth = 1)
         for n in range(len(measure)):
             if hasattr(measure[n], 'asLily'):
                 measure[n] = measure[n].asLily()
@@ -576,8 +600,9 @@ def execLily(filename):
     #return os.system(lilyCall)
     return subprocess.call(lilyCall, shell=True)
 
-def _testComposer(args, makepdf = False):
-    USAGE = "python3 {} <configFile.ini> [outputFilename]".format(args[0])
+def _testComposer(args):
+    USAGE = "python3 {} <configFile.ini> [outputFilename] [-x]\n\
+             -x : Do not call GNU Lilypond (don't generate PDF)".format(args[0])
     cfgFilename = None
     outputFilename = None
     if len(args) > 2:
@@ -585,6 +610,10 @@ def _testComposer(args, makepdf = False):
         outputFilename = args[2]
     elif len(args) > 1:
         cfgFilename = args[1]
+    if '-x' in args:
+        makepdf = False
+    else:
+        makepdf = True
     composer = Composer(cfgFilename, outputFilename)
     composer.writeAll()
     if makepdf:
@@ -667,7 +696,7 @@ if __name__ == "__main__":
     muse.LOGFILE = LOGFILE
     pypond.LOGFILE = LOGFILE
     argv = sys.argv
-    _testComposer(argv, makepdf = True)
+    _testComposer(argv)
     #_testOrchestratorDecomposeNote(argv)
     #_testOrchestratorCombineRests(argv)
     #_testOrchestratorFlattenList(argv)

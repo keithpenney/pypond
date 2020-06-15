@@ -1,8 +1,11 @@
 #!/usr/bin/python3
 
-import pypond, muse
+import pypond
+import muse
 from circular import Circular
 import re
+
+import math
 
 def _rotate(l, n):
     """Return a copy of list/yuple 'l' as a list rotated by increment 'n'

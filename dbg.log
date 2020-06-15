@@ -1,108 +1,18 @@
 [muse.py]	config(clef) = treble
-[muse.py]	config(noteLowest) = A3
-[muse.py]	config(noteHighest) = C6
+[muse.py]	config(noteLowest) = Bb3
+[muse.py]	config(noteHighest) = Bb5
 [muse.py]	config(key) = EbMaj
-[muse.py]	config(diatonicity) = 0.75
+[muse.py]	config(diatonicity) = 1
 [muse.py]	config(timeSignature) = 4/4
 [muse.py]	config(algorithm) = MARandom
 [muse.py]	config(numMeasures) = 32
-[muse.py]	config(density) = 0.5
+[muse.py]	config(density) = 1.0
 [muse.py]	config(shortestNote) = 1/16
 [muse.py]	config(longestNote) = 1
-[muse.py]	noteMin = A3; noteMax = C6
+[muse.py]	noteMin = Bb3; noteMax = Bb5
 [muse.py]	key = Ebmaj
-[muse.py]	noteMin = A3; in key? False
-[muse.py]	noteMax = C6; in key? True
+[muse.py]	noteMin = Bb3; in key? True
+[muse.py]	noteMax = Bb5; in key? True
 [muse.py]	Configuration(cfg.ini) read 11 items; used defaults for 0 items
-[muse.py]	self.minPitch = 57; = 84
-[composer.py]	opening MARandom_200601_003654.ly
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = F#maj
-[muse.py]	noteMin = A3; in key? False
-[muse.py]	noteMax = C6; in key? False
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = D#maj
-[muse.py]	noteMin = A3; in key? False
-[muse.py]	noteMax = C6; in key? True
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = Amaj
-[muse.py]	noteMin = A3; in key? True
-[muse.py]	noteMax = C6; in key? False
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = Fmaj
-[muse.py]	noteMin = A3; in key? True
-[muse.py]	noteMax = C6; in key? True
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = Emaj
-[muse.py]	noteMin = A3; in key? True
-[muse.py]	noteMax = C6; in key? False
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = Fmaj
-[muse.py]	noteMin = A3; in key? True
-[muse.py]	noteMax = C6; in key? True
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = C#maj
-[muse.py]	noteMin = A3; in key? False
-[muse.py]	noteMax = C6; in key? True
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = Gmaj
-[muse.py]	noteMin = A3; in key? True
-[muse.py]	noteMax = C6; in key? True
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = Bmaj
-[muse.py]	noteMin = A3; in key? False
-[muse.py]	noteMax = C6; in key? False
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = D#maj
-[muse.py]	noteMin = A3; in key? False
-[muse.py]	noteMax = C6; in key? True
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = Cmaj
-[muse.py]	noteMin = A3; in key? True
-[muse.py]	noteMax = C6; in key? True
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = D#maj
-[muse.py]	noteMin = A3; in key? False
-[muse.py]	noteMax = C6; in key? True
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = D#maj
-[muse.py]	noteMin = A3; in key? False
-[muse.py]	noteMax = C6; in key? True
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = A#maj
-[muse.py]	noteMin = A3; in key? True
-[muse.py]	noteMax = C6; in key? True
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = Amaj
-[muse.py]	noteMin = A3; in key? True
-[muse.py]	noteMax = C6; in key? False
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = F#maj
-[muse.py]	noteMin = A3; in key? False
-[muse.py]	noteMax = C6; in key? False
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = Cmaj
-[muse.py]	noteMin = A3; in key? True
-[muse.py]	noteMax = C6; in key? True
-[muse.py]	self.minPitch = 57; = 84
-[muse.py]	noteMin = A3; noteMax = C6
-[muse.py]	key = Cmaj
-[muse.py]	noteMin = A3; in key? True
-[muse.py]	noteMax = C6; in key? True
-[muse.py]	self.minPitch = 57; = 84
+[muse.py]	self.minPitch = 58; = 82
+[composer.py]	opening MARandom_200614_190612.ly
